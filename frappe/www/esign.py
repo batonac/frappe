@@ -156,6 +156,14 @@ def save_signature():
 	if not all([doctype, name, fieldname, signature_data]):
 		frappe.throw(_("Missing required parameters"))
 
+	# Validate signature data format (should be data:image/png;base64,...)
+	if not signature_data.startswith("data:image/"):
+		frappe.throw(_("Invalid signature data format"))
+
+	# Limit signature data size (max 1MB)
+	if len(signature_data) > 1024 * 1024:
+		frappe.throw(_("Signature data too large"))
+
 	try:
 		doc = frappe.get_doc(doctype, name)
 		
@@ -177,6 +185,13 @@ def save_signature():
 		if meta.is_submittable and not field.allow_on_submit:
 			frappe.throw(_("Signature field does not allow modification after submission"))
 			
+		# Validate that this field should be available for signing
+		available_fields = get_signature_fields(doc, meta)
+		field_available = any(f["fieldname"] == fieldname for f in available_fields)
+		
+		if not field_available:
+			frappe.throw(_("Signature field is not available for signing"))
+		
 		# Set the signature value
 		doc.set(fieldname, signature_data)
 		
@@ -184,13 +199,20 @@ def save_signature():
 		doc.flags.ignore_validate = True
 		doc.flags.ignore_mandatory = True
 		doc.flags.ignore_permissions = True
+		doc.flags.in_signature_capture = True
 		
 		doc.save()
 		
 		frappe.db.commit()
 		
+		# Log the signature capture for audit trail
+		frappe.logger("esign").info(f"Signature captured for {doctype} {name} field {fieldname}")
+		
 		return {"status": "success", "message": _("Signature saved successfully")}
 		
+	except frappe.ValidationError as e:
+		frappe.db.rollback()
+		frappe.throw(_("Validation Error: {0}").format(str(e)))
 	except Exception as e:
 		frappe.db.rollback()
 		frappe.log_error(frappe.get_traceback(), "E-Signature Save Error")

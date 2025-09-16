@@ -67,6 +67,11 @@
 			color: #721c24;
 			border: 1px solid #f5c6cb;
 		}
+		.signature-status.info {
+			background: #d1ecf1;
+			color: #0c5460;
+			border: 1px solid #b8daff;
+		}
 		.action-banner {
 			background: #f8f9fa;
 			border-bottom: 1px solid #ddd;
@@ -189,8 +194,21 @@
 				return;
 			}
 
+			// Validate signature data format
+			if (!signatureData.startsWith('data:image/')) {
+				showStatus(fieldname, 'error', 'Invalid signature format');
+				return;
+			}
+
+			// Check data size (client-side pre-validation)
+			if (signatureData.length > 1024 * 1024) {
+				showStatus(fieldname, 'error', 'Signature data is too large');
+				return;
+			}
+
 			// Show loading state
 			showStatus(fieldname, 'info', 'Saving signature...');
+			disableSignatureControls(fieldname, true);
 
 			// Save signature via API
 			const data = {
@@ -217,12 +235,17 @@
 					// Disable the controls for this field
 					disableSignatureField(fieldname);
 				} else {
-					showStatus(fieldname, 'error', result.exc || result.message || 'Failed to save signature');
+					const errorMsg = result.exc_type ? 
+						result.exc_type + ': ' + (result._exc_messages || result.message || 'Unknown error') :
+						result.message || 'Failed to save signature';
+					showStatus(fieldname, 'error', errorMsg);
+					disableSignatureControls(fieldname, false);
 				}
 			})
 			.catch(error => {
 				console.error('Error saving signature:', error);
-				showStatus(fieldname, 'error', 'Error saving signature. Please try again.');
+				showStatus(fieldname, 'error', 'Network error. Please check your connection and try again.');
+				disableSignatureControls(fieldname, false);
 			});
 		}
 
@@ -251,6 +274,17 @@
 					pad.style.pointerEvents = 'none';
 					pad.style.opacity = '0.7';
 				}
+			}
+		}
+
+		function disableSignatureControls(fieldname, disabled) {
+			const container = document.querySelector(`.signature-field-container[data-fieldname="${fieldname}"]`);
+			if (container) {
+				const buttons = container.querySelectorAll('button');
+				buttons.forEach(button => {
+					button.disabled = disabled;
+					button.style.opacity = disabled ? '0.5' : '1';
+				});
 			}
 		}
 	</script>
