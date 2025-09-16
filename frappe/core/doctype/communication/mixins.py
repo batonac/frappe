@@ -162,6 +162,31 @@ class CommunicationEmailMixin:
 			}
 		)
 
+	def get_esign_link(self, print_format=None):
+		"""Return public link for e-signature via `templates/emails/esign_link.html`."""
+		from frappe.www.esign import get_signature_fields
+		
+		parent_doc = get_parent_doc(self)
+		if not parent_doc:
+			return ""
+		
+		meta = frappe.get_meta(self.reference_doctype)
+		signature_fields = get_signature_fields(parent_doc, meta)
+		
+		# Only return link if there are signature fields that need signing
+		if not signature_fields:
+			return ""
+		
+		return frappe.get_template("templates/emails/esign_link.html").render(
+			{
+				"url": get_url(),
+				"doctype": self.reference_doctype,
+				"name": self.reference_name,
+				"print_format": print_format or "standard",
+				"key": parent_doc.get_document_share_key(),
+			}
+		)
+
 	def get_outgoing_email_account(self):
 		if not hasattr(self, "_outgoing_email_account"):
 			if self.email_account:

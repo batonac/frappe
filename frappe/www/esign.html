@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ layout_direction }}">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>{{ _("E-Sign") }}: {{ title }}</title>
+	<meta name="generator" content="frappe">
+	{{ include_style('print.bundle.css') }}
+	{% if print_style %}
+		<style>
+		{{ print_style }}
+		</style>
+	{% endif %}
+	<style>
+		.signature-widget {
+			border: 2px solid #ddd;
+			border-radius: 8px;
+			padding: 20px;
+			margin: 20px 0;
+			background: #f9f9f9;
+		}
+		.signature-field {
+			border: 1px solid #ccc;
+			background: white;
+			margin: 10px 0;
+		}
+		.signature-pad {
+			width: 100%;
+			height: 200px;
+			border: 1px solid #ddd;
+		}
+		.signature-controls {
+			margin-top: 10px;
+			text-align: center;
+		}
+		.signature-controls button {
+			margin: 0 5px;
+			padding: 8px 16px;
+			border: 1px solid #ddd;
+			background: #fff;
+			cursor: pointer;
+			border-radius: 4px;
+		}
+		.signature-controls button:hover {
+			background: #f0f0f0;
+		}
+		.signature-controls button.btn-primary {
+			background: #007bff;
+			color: white;
+			border-color: #007bff;
+		}
+		.signature-controls button.btn-primary:hover {
+			background: #0056b3;
+		}
+		.signature-status {
+			margin-top: 10px;
+			padding: 10px;
+			border-radius: 4px;
+		}
+		.signature-status.success {
+			background: #d4edda;
+			color: #155724;
+			border: 1px solid #c3e6cb;
+		}
+		.signature-status.error {
+			background: #f8d7da;
+			color: #721c24;
+			border: 1px solid #f5c6cb;
+		}
+		.action-banner {
+			background: #f8f9fa;
+			border-bottom: 1px solid #ddd;
+			padding: 10px;
+		}
+		.signature-widget h3 {
+			margin-top: 0;
+			color: #333;
+		}
+		.signature-field-info {
+			margin-bottom: 15px;
+			color: #666;
+		}
+	</style>
+</head>
+<body>
+	<div class="action-banner print-hide">
+		<a class="p-2" onclick="window.print();">
+			{{ _("Print") }}
+		</a>
+		<a class="p-2"
+			href="/api/method/frappe.utils.print_format.download_pdf?doctype={{doctype|e}}&name={{name|e}}&format={{print_format|e}}&letterhead={{letterhead|e}}&no_letterhead={{no_letterhead|e}}&_lang={{lang|e}}&key={{key|e}}">
+			{{ _('Get PDF') }}
+		</a>
+		<a class="p-2"
+			href="/printview?doctype={{doctype|e}}&name={{name|e}}&format={{print_format|e}}&letterhead={{letterhead|e}}&no_letterhead={{no_letterhead|e}}&_lang={{lang|e}}&key={{key|e}}">
+			{{ _('View Document') }}
+		</a>
+	</div>
+	<div class="print-format-gutter">
+		<div class="print-format">
+			{{ body }}
+		</div>
+		
+		{% if has_signature_fields %}
+		<div class="signature-widget print-hide">
+			<h3>{{ _("Electronic Signature Required") }}</h3>
+			<p>{{ _("Please provide your signature for the following fields:") }}</p>
+			
+			{% for field in signature_fields %}
+			<div class="signature-field-container" data-fieldname="{{ field.fieldname }}">
+				<div class="signature-field-info">
+					<strong>{{ field.label }}</strong>
+					{% if field.description %}
+					<br><small>{{ field.description }}</small>
+					{% endif %}
+				</div>
+				<div class="signature-field">
+					<canvas class="signature-pad" id="signature-{{ field.fieldname }}"></canvas>
+				</div>
+				<div class="signature-controls">
+					<button type="button" class="btn-clear" onclick="clearSignature('{{ field.fieldname }}')">
+						{{ _("Clear") }}
+					</button>
+					<button type="button" class="btn-primary" onclick="saveSignature('{{ field.fieldname }}')">
+						{{ _("Save Signature") }}
+					</button>
+				</div>
+				<div class="signature-status" id="status-{{ field.fieldname }}" style="display: none;"></div>
+			</div>
+			{% endfor %}
+		</div>
+		{% endif %}
+	</div>
+
+	<script src="/assets/frappe/js/lib/jSignature.min.js"></script>
+	<script>
+		document.addEventListener('DOMContentLoaded', () => {
+			const page_div = document.querySelector('.page-break');
+
+			if (page_div) {
+				page_div.style.display = 'flex';
+				page_div.style.flexDirection = 'column';
+			}
+
+			const footer_html = document.getElementById('footer-html');
+			if (footer_html) {
+				footer_html.classList.add('hidden-pdf');
+				footer_html.classList.remove('visible-pdf');
+				footer_html.style.order = 1;
+				footer_html.style.marginTop = '20px';
+			}
+
+			// Initialize signature pads
+			initializeSignaturePads();
+		});
+
+		const signaturePads = {};
+
+		function initializeSignaturePads() {
+			const pads = document.querySelectorAll('.signature-pad');
+			pads.forEach(pad => {
+				const fieldname = pad.id.replace('signature-', '');
+				signaturePads[fieldname] = $(pad).jSignature({
+					height: 200,
+					color: "#000",
+					lineWidth: 2,
+					backgroundColor: "#fff"
+				});
+			});
+		}
+
+		function clearSignature(fieldname) {
+			if (signaturePads[fieldname]) {
+				signaturePads[fieldname].jSignature('reset');
+				hideStatus(fieldname);
+			}
+		}
+
+		function saveSignature(fieldname) {
+			if (!signaturePads[fieldname]) {
+				showStatus(fieldname, 'error', 'Signature pad not initialized');
+				return;
+			}
+
+			// Check if signature is empty
+			const signatureData = signaturePads[fieldname].jSignature('getData');
+			if (!signatureData || signatureData.length === 0) {
+				showStatus(fieldname, 'error', 'Please provide a signature before saving');
+				return;
+			}
+
+			// Show loading state
+			showStatus(fieldname, 'info', 'Saving signature...');
+
+			// Save signature via API
+			const data = {
+				doctype: '{{ doctype }}',
+				name: '{{ name }}',
+				fieldname: fieldname,
+				signature_data: signatureData,
+				key: '{{ key }}'
+			};
+
+			fetch('/api/method/frappe.www.esign.save_signature', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+				},
+				body: Object.keys(data).map(key => 
+					encodeURIComponent(key) + '=' + encodeURIComponent(data[key])
+				).join('&')
+			})
+			.then(response => response.json())
+			.then(result => {
+				if (result.message && result.message.status === 'success') {
+					showStatus(fieldname, 'success', result.message.message || 'Signature saved successfully');
+					// Disable the controls for this field
+					disableSignatureField(fieldname);
+				} else {
+					showStatus(fieldname, 'error', result.exc || result.message || 'Failed to save signature');
+				}
+			})
+			.catch(error => {
+				console.error('Error saving signature:', error);
+				showStatus(fieldname, 'error', 'Error saving signature. Please try again.');
+			});
+		}
+
+		function showStatus(fieldname, type, message) {
+			const statusDiv = document.getElementById('status-' + fieldname);
+			statusDiv.className = 'signature-status ' + type;
+			statusDiv.textContent = message;
+			statusDiv.style.display = 'block';
+		}
+
+		function hideStatus(fieldname) {
+			const statusDiv = document.getElementById('status-' + fieldname);
+			statusDiv.style.display = 'none';
+		}
+
+		function disableSignatureField(fieldname) {
+			const container = document.querySelector(`.signature-field-container[data-fieldname="${fieldname}"]`);
+			if (container) {
+				const buttons = container.querySelectorAll('button');
+				buttons.forEach(button => {
+					button.disabled = true;
+					button.style.opacity = '0.5';
+				});
+				const pad = container.querySelector('.signature-pad');
+				if (pad) {
+					pad.style.pointerEvents = 'none';
+					pad.style.opacity = '0.7';
+				}
+			}
+		}
+	</script>
+</body>
+{%- if comment -%}
+<!-- {{ comment }} -->
+{%- endif -%}
+</html>
