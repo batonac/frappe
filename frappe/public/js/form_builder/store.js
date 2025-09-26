@@ -14,6 +14,7 @@ export const useStore = defineStore("form-builder-store", () => {
 	let doc = ref(null);
 	let docfields = ref([]);
 	let custom_docfields = ref([]);
+	let web_form_docfields = ref([]);
 	let form = ref({
 		layout: {},
 		active_tab: null,
@@ -22,6 +23,7 @@ export const useStore = defineStore("form-builder-store", () => {
 	let dirty = ref(false);
 	let read_only = ref(false);
 	let is_customize_form = ref(false);
+	let is_web_form = ref(false);
 	let preview = ref(false);
 	let drag = ref(false);
 	let get_animation = "cubic-bezier(0.34, 1.56, 0.64, 1)";
@@ -29,6 +31,7 @@ export const useStore = defineStore("form-builder-store", () => {
 
 	// Getters
 	let get_docfields = computed(() => {
+		if (is_web_form.value) return web_form_docfields.value;
 		return is_customize_form.value ? custom_docfields.value : docfields.value;
 	});
 
@@ -51,13 +54,15 @@ export const useStore = defineStore("form-builder-store", () => {
 	}
 
 	function get_df(fieldtype, fieldname = "", label = "") {
-		let docfield = is_customize_form.value ? "Customize Form Field" : "DocField";
+		let docfield = is_web_form.value ? "Web Form Field" : 
+						is_customize_form.value ? "Customize Form Field" : "DocField";
 		let df = frappe.model.get_new_doc(docfield);
 		df.name = frappe.utils.get_random(8);
 		df.fieldtype = fieldtype;
 		df.fieldname = fieldname;
 		df.label = label;
 		is_customize_form.value && (df.is_custom_field = 1);
+		is_web_form.value && (df.parent = frm.value.doc.name);
 		return df;
 	}
 
@@ -95,12 +100,15 @@ export const useStore = defineStore("form-builder-store", () => {
 		}
 
 		if (!get_docfields.value.length) {
-			let docfield = is_customize_form.value ? "Customize Form Field" : "DocField";
+			let docfield = is_web_form.value ? "Web Form Field" :
+						  is_customize_form.value ? "Customize Form Field" : "DocField";
 			if (!frappe.get_meta(docfield)) {
 				await load_doctype_model(docfield);
 			}
 			let df = frappe.get_meta(docfield).fields;
-			if (is_customize_form.value) {
+			if (is_web_form.value) {
+				web_form_docfields.value = df;
+			} else if (is_customize_form.value) {
 				custom_docfields.value = df;
 			} else {
 				docfields.value = df;
@@ -236,7 +244,9 @@ export const useStore = defineStore("form-builder-store", () => {
 			let fields = get_updated_fields();
 			let has_error = validate_fields(fields, doc.value.istable);
 			if (has_error) return has_error;
-			frm.value.set_value("fields", fields);
+			
+			let field_property = is_web_form.value ? "web_form_fields" : "fields";
+			frm.value.set_value(field_property, fields);
 			return fields;
 		} catch (e) {
 			console.error(e);
@@ -248,9 +258,8 @@ export const useStore = defineStore("form-builder-store", () => {
 	function get_updated_fields() {
 		let fields = [];
 		let idx = 0;
-		let new_field_name = is_customize_form.value
-			? "new-customize-form-field-"
-			: "new-docfield-";
+		let new_field_name = is_web_form.value ? "new-web-form-field-" :
+						  is_customize_form.value ? "new-customize-form-field-" : "new-docfield-";
 
 		let layout_fields = JSON.parse(JSON.stringify(form.value.layout.tabs));
 
@@ -329,7 +338,8 @@ export const useStore = defineStore("form-builder-store", () => {
 	}
 
 	function get_layout() {
-		return create_layout(doc.value.fields);
+		let fields = is_web_form.value ? doc.value.web_form_fields : doc.value.fields;
+		return create_layout(fields);
 	}
 
 	// Tab actions
@@ -365,6 +375,7 @@ export const useStore = defineStore("form-builder-store", () => {
 		dirty,
 		read_only,
 		is_customize_form,
+		is_web_form,
 		preview,
 		drag,
 		get_animation,

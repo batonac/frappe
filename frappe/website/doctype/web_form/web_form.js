@@ -23,6 +23,28 @@ frappe.ui.form.on("Web Form", {
 		};
 	},
 
+	before_save: function (frm) {
+		let form_builder = frappe.web_form_builder;
+		if (form_builder?.store) {
+			let fields = form_builder.store.update_fields();
+
+			// if fields is a string, it means there is an error
+			if (typeof fields === "string") {
+				frappe.throw(fields);
+			}
+		}
+	},
+
+	after_save: function (frm) {
+		if (
+			frappe.web_form_builder &&
+			frappe.web_form_builder.doctype === frm.doc.name &&
+			frappe.web_form_builder.store
+		) {
+			frappe.web_form_builder.store.fetch();
+		}
+	},
+
 	refresh: function (frm) {
 		// get iframe url for web form
 		frm.sidebar
@@ -46,6 +68,30 @@ frappe.ui.form.on("Web Form", {
 		frm.trigger("add_get_fields_button");
 		frm.trigger("add_publish_button");
 		frm.trigger("render_condition_table");
+		
+		if (frm.doc.doc_type) {
+			render_form_builder(frm);
+		}
+	},
+
+	doc_type: function (frm) {
+		if (frm.doc.doc_type) {
+			render_form_builder(frm);
+		}
+	},
+
+	on_tab_change: (frm) => {
+		let current_tab = frm.get_active_tab().label;
+
+		if (current_tab === "Form Builder") {
+			frm.footer.wrapper.hide();
+			frm.form_wrapper.find(".form-message").hide();
+			frm.form_wrapper.addClass("mb-1");
+		} else {
+			frm.footer.wrapper.show();
+			frm.form_wrapper.find(".form-message").show();
+			frm.form_wrapper.removeClass("mb-1");
+		}
 	},
 
 	login_required: function (frm) {
@@ -374,5 +420,35 @@ function render_list_settings_message(frm) {
 			.click(() => frm.scroll_to_field("login_required"));
 	} else {
 		$(frm.fields_dict["list_setting_message"].wrapper).empty();
+	}
+}
+
+function render_form_builder(frm) {
+	if (!frm.doc.doc_type) return;
+	
+	if (frappe.web_form_builder && frappe.web_form_builder.doctype === frm.doc.name) {
+		frappe.web_form_builder.setup_page_actions();
+		frappe.web_form_builder.store.fetch();
+		return;
+	}
+
+	if (frappe.web_form_builder) {
+		frappe.web_form_builder.wrapper = $(frm.fields_dict["form_builder"].wrapper);
+		frappe.web_form_builder.frm = frm;
+		frappe.web_form_builder.doctype = frm.doc.name;
+		frappe.web_form_builder.customize = false;
+		frappe.web_form_builder.webform = true;
+		frappe.web_form_builder.init(true);
+		frappe.web_form_builder.store.fetch();
+	} else {
+		frappe.require("form_builder.bundle.js").then(() => {
+			frappe.web_form_builder = new frappe.ui.FormBuilder({
+				wrapper: $(frm.fields_dict["form_builder"].wrapper),
+				frm: frm,
+				doctype: frm.doc.name,
+				customize: false,
+				webform: true,
+			});
+		});
 	}
 }

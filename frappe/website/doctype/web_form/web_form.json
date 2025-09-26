@@ -16,6 +16,8 @@
   "section_break_1",
   "introduction_text",
   "web_form_fields",
+  "form_builder_tab",
+  "form_builder",
   "settings_tab",
   "access_control_section",
   "anonymous",
@@ -293,6 +295,16 @@
   {
    "fieldname": "section_break_1",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "form_builder_tab",
+   "fieldtype": "Tab Break",
+   "label": "Form Builder"
+  },
+  {
+   "fieldname": "form_builder",
+   "fieldtype": "HTML",
+   "label": "Form Builder"
   },
   {
    "fieldname": "settings_tab",
