@@ -1,0 +1,458 @@
+{% extends "templates/web.html" %}
+
+{% block meta_block %}
+	{% include "templates/includes/meta_block.html" %}
+{% endblock %}
+
+{% if hide_navbar %}{% block navbar %}{% endblock %}{% endif %}
+{% if hide_footer %}{% block footer %}{% endblock %}{% endif %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block header %}
+	{% if webform_banner_image %}
+		<!-- banner image -->
+		<img class="web-form-banner-image" src="{{ webform_banner_image }}" alt="Banner Image">
+	{% endif %}
+{% endblock %}
+
+{% macro header_buttons() %}
+	{% block header_buttons %}
+	{% if allow_edit and in_view_mode %}
+		<!-- edit button -->
+		<a href="/{{ route }}/{{ doc_name }}/edit" class="edit-button btn btn-default btn-sm">{{ _("Edit", context="Button in web form") }}</a>
+	{% endif %}
+
+	{% if allow_print and in_view_mode %}
+		{% set print_format_url = "/printview?doctype=" + doc_type + "&name=" + doc_name + "&format=" + (print_format or "standard") %}
+		<!-- print button -->
+		<a href="{{ print_format_url }}" target="_blank" class="print-btn btn btn-default btn-sm ml-2">
+			<svg class="icon icon-sm"><use href="#icon-printer"></use></svg>
+		</a>
+	{% endif %}
+	{% endblock %}
+{% endmacro %}
+
+{% block page_content %}
+<div class="web-form-wrapper">
+	<div class="web-form-container">
+		{% if show_title != 0 %}
+		<div>
+			<h1>{{ _(title) }}</h1>
+		</div>
+		{% endif %}
+
+		{% if introduction_text %}
+		<div class="introduction-text">
+			{{ introduction_text }}
+		</div>
+		{% endif %}
+
+		<!-- Document Content (Print View Style) -->
+		<div class="print-format-gutter">
+			<div class="print-format">
+				{{ doc_html }}
+			</div>
+		</div>
+
+		<!-- E-Signature Section -->
+		{% if has_signature_fields and not in_view_mode %}
+		<div class="signature-widget">
+			<h3>{{ _("Electronic Signature Required") }}</h3>
+			<p>{{ _("Please provide your signature for the following fields:") }}</p>
+			
+			{% for field in signature_fields %}
+			<div class="signature-field-container" data-fieldname="{{ field.fieldname }}">
+				<div class="signature-field-info">
+					<strong>{{ field.label }}</strong>
+					{% if field.description %}
+					<br><small>{{ field.description }}</small>
+					{% endif %}
+				</div>
+				<div class="signature-field">
+					<canvas class="signature-pad" id="signature-{{ field.fieldname }}" width="600" height="200"></canvas>
+				</div>
+				<div class="signature-controls">
+					<button type="button" class="btn-clear btn btn-default btn-sm" onclick="clearSignature('{{ field.fieldname }}')">
+						{{ _("Clear") }}
+					</button>
+					<button type="button" class="btn-primary btn btn-primary btn-sm" onclick="saveSignature('{{ field.fieldname }}')">
+						{{ _("Save Signature") }}
+					</button>
+				</div>
+				<div class="signature-status" id="status-{{ field.fieldname }}" style="display: none;"></div>
+			</div>
+			{% endfor %}
+			
+			<!-- Submit Form Button -->
+			<div class="form-actions mt-4">
+				<button type="button" class="btn btn-success btn-lg" onclick="submitForm()">
+					{{ _("Complete eSign Process") }}
+				</button>
+			</div>
+		</div>
+		{% endif %}
+
+		<!-- Success/Completion Message -->
+		{% if in_view_mode %}
+		<div class="completion-message">
+			<div class="alert alert-success" role="alert">
+				<h4 class="alert-heading">{{ _("Document Signed Successfully") }}</h4>
+				<p>{{ _("This document has been completed and electronically signed.") }}</p>
+			</div>
+		</div>
+		{% endif %}
+	</div>
+</div>
+
+<style>
+	.web-form-wrapper {
+		max-width: 900px;
+		margin: 0 auto;
+		padding: 2rem;
+	}
+	.signature-widget {
+		border: 2px solid #ddd;
+		border-radius: 8px;
+		padding: 20px;
+		margin: 20px 0;
+		background: #f9f9f9;
+	}
+	.signature-field {
+		border: 1px solid #ccc;
+		background: white;
+		margin: 10px 0;
+	}
+	.signature-pad {
+		width: 100%;
+		height: 200px;
+		border: 1px solid #ddd;
+		cursor: crosshair;
+		touch-action: none;
+	}
+	.signature-controls {
+		margin-top: 10px;
+		text-align: center;
+	}
+	.signature-controls button {
+		margin: 0 5px;
+		padding: 8px 16px;
+	}
+	.signature-status {
+		margin-top: 10px;
+		padding: 10px;
+		border-radius: 4px;
+	}
+	.signature-status.success {
+		background: #d4edda;
+		color: #155724;
+		border: 1px solid #c3e6cb;
+	}
+	.signature-status.error {
+		background: #f8d7da;
+		color: #721c24;
+		border: 1px solid #f5c6cb;
+	}
+	.signature-status.info {
+		background: #d1ecf1;
+		color: #0c5460;
+		border: 1px solid #b8daff;
+	}
+	.signature-widget h3 {
+		margin-top: 0;
+		color: #333;
+	}
+	.signature-field-info {
+		margin-bottom: 15px;
+		color: #666;
+	}
+	.form-actions {
+		text-align: center;
+		border-top: 1px solid #ddd;
+		padding-top: 20px;
+	}
+	.completion-message {
+		margin: 20px 0;
+	}
+	.print-format-gutter {
+		margin: 20px 0;
+		border: 1px solid #ddd;
+		border-radius: 4px;
+	}
+	.print-format {
+		padding: 20px;
+		background: white;
+	}
+	.introduction-text {
+		margin-bottom: 20px;
+		padding: 15px;
+		background: #f8f9fa;
+		border-left: 4px solid #007bff;
+		border-radius: 4px;
+	}
+</style>
+
+<script>
+	// Simple signature pad implementation using Pointer Events API
+	class SignaturePad {
+		constructor(canvas) {
+			this.canvas = canvas;
+			this.ctx = canvas.getContext('2d');
+			this.isDrawing = false;
+			this.lastPoint = { x: 0, y: 0 };
+			
+			// Set canvas properties
+			this.ctx.strokeStyle = '#000';
+			this.ctx.lineWidth = 2;
+			this.ctx.lineCap = 'round';
+			this.ctx.lineJoin = 'round';
+			
+			// Set canvas size
+			this.resizeCanvas();
+			
+			this.setupEventListeners();
+		}
+		
+		resizeCanvas() {
+			const rect = this.canvas.getBoundingClientRect();
+			const dpr = window.devicePixelRatio || 1;
+			
+			this.canvas.width = rect.width * dpr;
+			this.canvas.height = 200 * dpr;
+			
+			this.ctx.scale(dpr, dpr);
+			
+			// Re-apply canvas properties after resize
+			this.ctx.strokeStyle = '#000';
+			this.ctx.lineWidth = 2;
+			this.ctx.lineCap = 'round';
+			this.ctx.lineJoin = 'round';
+		}
+		
+		setupEventListeners() {
+			// Pointer Events for modern browsers (handles mouse, touch, and pen)
+			this.canvas.addEventListener('pointerdown', this.startDrawing.bind(this));
+			this.canvas.addEventListener('pointermove', this.draw.bind(this));
+			this.canvas.addEventListener('pointerup', this.stopDrawing.bind(this));
+			this.canvas.addEventListener('pointerout', this.stopDrawing.bind(this));
+			
+			// Fallback to mouse events for older browsers
+			this.canvas.addEventListener('mousedown', this.startDrawing.bind(this));
+			this.canvas.addEventListener('mousemove', this.draw.bind(this));
+			this.canvas.addEventListener('mouseup', this.stopDrawing.bind(this));
+			this.canvas.addEventListener('mouseout', this.stopDrawing.bind(this));
+			
+			// Touch events for mobile devices (fallback)
+			this.canvas.addEventListener('touchstart', this.handleTouch.bind(this));
+			this.canvas.addEventListener('touchmove', this.handleTouch.bind(this));
+			this.canvas.addEventListener('touchend', this.stopDrawing.bind(this));
+		}
+		
+		getPoint(event) {
+			const rect = this.canvas.getBoundingClientRect();
+			return {
+				x: (event.clientX || event.touches?.[0]?.clientX || 0) - rect.left,
+				y: (event.clientY || event.touches?.[0]?.clientY || 0) - rect.top
+			};
+		}
+		
+		handleTouch(event) {
+			event.preventDefault();
+			const touch = event.touches[0];
+			if (touch) {
+				const point = this.getPoint(touch);
+				if (event.type === 'touchstart') {
+					this.startDrawing({ clientX: touch.clientX, clientY: touch.clientY });
+				} else if (event.type === 'touchmove') {
+					this.draw({ clientX: touch.clientX, clientY: touch.clientY });
+				}
+			}
+		}
+		
+		startDrawing(event) {
+			this.isDrawing = true;
+			this.lastPoint = this.getPoint(event);
+			
+			// Draw a small dot for single clicks
+			this.ctx.beginPath();
+			this.ctx.arc(this.lastPoint.x, this.lastPoint.y, 1, 0, 2 * Math.PI);
+			this.ctx.fill();
+		}
+		
+		draw(event) {
+			if (!this.isDrawing) return;
+			
+			const currentPoint = this.getPoint(event);
+			
+			this.ctx.beginPath();
+			this.ctx.moveTo(this.lastPoint.x, this.lastPoint.y);
+			this.ctx.lineTo(currentPoint.x, currentPoint.y);
+			this.ctx.stroke();
+			
+			this.lastPoint = currentPoint;
+		}
+		
+		stopDrawing() {
+			this.isDrawing = false;
+		}
+		
+		clear() {
+			this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+		}
+		
+		isEmpty() {
+			const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+			const data = imageData.data;
+			
+			for (let i = 0; i < data.length; i += 4) {
+				if (data[i + 3] !== 0) { // Check alpha channel
+					return false;
+				}
+			}
+			return true;
+		}
+		
+		getSignatureData() {
+			if (this.isEmpty()) {
+				return '';
+			}
+			return this.canvas.toDataURL('image/png');
+		}
+	}
+
+	const signaturePads = {};
+	let signedFields = new Set();
+
+	document.addEventListener('DOMContentLoaded', () => {
+		initializeSignaturePads();
+	});
+
+	function initializeSignaturePads() {
+		const canvases = document.querySelectorAll('.signature-pad');
+		canvases.forEach(canvas => {
+			const fieldname = canvas.id.replace('signature-', '');
+			signaturePads[fieldname] = new SignaturePad(canvas);
+		});
+	}
+
+	function clearSignature(fieldname) {
+		if (signaturePads[fieldname]) {
+			signaturePads[fieldname].clear();
+			hideStatus(fieldname);
+			signedFields.delete(fieldname);
+		}
+	}
+
+	function saveSignature(fieldname) {
+		if (!signaturePads[fieldname]) {
+			showStatus(fieldname, 'error', 'Signature pad not initialized');
+			return;
+		}
+
+		// Check if signature is empty
+		const signatureData = signaturePads[fieldname].getSignatureData();
+		if (!signatureData || signatureData.length === 0) {
+			showStatus(fieldname, 'error', 'Please provide a signature before saving');
+			return;
+		}
+
+		// Validate signature data format
+		if (!signatureData.startsWith('data:image/')) {
+			showStatus(fieldname, 'error', 'Invalid signature format');
+			return;
+		}
+
+		// Show loading state
+		showStatus(fieldname, 'info', 'Saving signature...');
+		disableSignatureControls(fieldname, true);
+
+		// Save signature via API (using the same API as the original esign portal)
+		const data = {
+			doctype: '{{ doc_type }}',
+			name: '{{ doc_name }}',
+			fieldname: fieldname,
+			signature_data: signatureData,
+			key: '{{ key }}'
+		};
+
+		fetch('/api/method/frappe.www.esign.save_signature', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded',
+			},
+			body: Object.keys(data).map(key => 
+				encodeURIComponent(key) + '=' + encodeURIComponent(data[key])
+			).join('&')
+		})
+		.then(response => response.json())
+		.then(result => {
+			if (result.message && result.message.status === 'success') {
+				showStatus(fieldname, 'success', result.message.message || 'Signature saved successfully');
+				signedFields.add(fieldname);
+				disableSignatureField(fieldname);
+			} else {
+				const errorMsg = result.exc_type ? 
+					result.exc_type + ': ' + (result._exc_messages || result.message || 'Unknown error') :
+					result.message || 'Failed to save signature';
+				showStatus(fieldname, 'error', errorMsg);
+				disableSignatureControls(fieldname, false);
+			}
+		})
+		.catch(error => {
+			console.error('Error saving signature:', error);
+			showStatus(fieldname, 'error', 'Network error. Please check your connection and try again.');
+			disableSignatureControls(fieldname, false);
+		});
+	}
+
+	function submitForm() {
+		const totalFields = document.querySelectorAll('.signature-field-container').length;
+		if (signedFields.size < totalFields) {
+			alert('Please complete all signature fields before submitting.');
+			return;
+		}
+
+		// All signatures completed, redirect to success page or show completion
+		window.location.href = '/{{ route }}/{{ doc_name }}';
+	}
+
+	function showStatus(fieldname, type, message) {
+		const statusDiv = document.getElementById('status-' + fieldname);
+		statusDiv.className = 'signature-status ' + type;
+		statusDiv.textContent = message;
+		statusDiv.style.display = 'block';
+	}
+
+	function hideStatus(fieldname) {
+		const statusDiv = document.getElementById('status-' + fieldname);
+		statusDiv.style.display = 'none';
+	}
+
+	function disableSignatureField(fieldname) {
+		const container = document.querySelector(`.signature-field-container[data-fieldname="${fieldname}"]`);
+		if (container) {
+			const buttons = container.querySelectorAll('button');
+			buttons.forEach(button => {
+				button.disabled = true;
+				button.style.opacity = '0.5';
+			});
+			const pad = container.querySelector('.signature-pad');
+			if (pad) {
+				pad.style.pointerEvents = 'none';
+				pad.style.opacity = '0.7';
+			}
+		}
+	}
+
+	function disableSignatureControls(fieldname, disabled) {
+		const container = document.querySelector(`.signature-field-container[data-fieldname="${fieldname}"]`);
+		if (container) {
+			const buttons = container.querySelectorAll('button');
+			buttons.forEach(button => {
+				button.disabled = disabled;
+				button.style.opacity = disabled ? '0.5' : '1';
+			});
+		}
+	}
+</script>
+{% endblock %}

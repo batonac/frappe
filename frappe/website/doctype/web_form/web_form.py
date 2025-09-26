@@ -45,6 +45,7 @@ class WebForm(WebsiteGenerator):
 		condition_json: DF.JSON | None
 		custom_css: DF.Code | None
 		doc_type: DF.Link
+		enable_esign: DF.Check
 		hide_footer: DF.Check
 		hide_navbar: DF.Check
 		introduction_text: DF.TextEditor | None
@@ -149,6 +150,10 @@ def get_context(context):
 
 		if frappe.form_dict.is_list:
 			context.template = "website/doctype/web_form/templates/web_list.html"
+		elif self.enable_esign and frappe.form_dict.name and not frappe.form_dict.is_new:
+			# Use esign template when esign is enabled and we have a document
+			context.template = "website/doctype/web_form/templates/web_form_esign.html"
+			self.prepare_esign_context(context)
 		else:
 			context.template = "website/doctype/web_form/templates/web_form.html"
 
@@ -514,6 +519,46 @@ def get_context(context):
 	def allow_website_search_indexing(self):
 		return False
 
+	def prepare_esign_context(self, context):
+		"""Prepare context for e-signature functionality"""
+		from frappe.www.esign import get_signature_fields
+		from frappe.www.printview import get_rendered_template, get_print_format_doc, set_link_titles
+		
+		if not frappe.form_dict.name:
+			return
+			
+		# Get the document
+		doc = frappe.get_doc(self.doc_type, frappe.form_dict.name)
+		context.doc_name = frappe.form_dict.name
+		
+		# Set link titles for the document
+		set_link_titles(doc)
+		
+		# Get signature fields that need signing
+		meta = frappe.get_meta(self.doc_type)
+		signature_fields = get_signature_fields(doc, meta)
+		context.has_signature_fields = bool(signature_fields)
+		context.signature_fields = signature_fields
+		
+		# Generate document HTML using print format
+		print_format = get_print_format_doc(context.get('print_format'), meta=meta)
+		
+		try:
+			doc_html = get_rendered_template(
+				doc=doc,
+				print_format=print_format,
+				meta=meta,
+				no_letterhead=True,  # Keep it clean for esign
+				settings={}
+			)
+			context.doc_html = doc_html
+		except Exception:
+			# Fallback to basic document display
+			context.doc_html = f"<h2>{doc.get_title() or doc.name}</h2><p>Document ready for signature.</p>"
+		
+		# Add document share key for API access
+		context.key = doc.get_document_share_key() if hasattr(doc, 'get_document_share_key') else ""
+
 	def has_web_form_permission(self, doctype, name, ptype="read"):
 		if frappe.session.user == "Guest":
 			return False
@@ -835,6 +880,66 @@ def get_link_options(web_form_name, doctype, allow_read_on_all_link_options=Fals
 
 		# Use the actual names as options without labels
 		return "\n".join([str(doc.value) for doc in link_options])
+
+
+@frappe.whitelist()
+def get_esign_webforms_for_doctype(doctype):
+	"""Get all published esign-enabled web forms for a specific doctype"""
+	return frappe.get_all(
+		"Web Form",
+		filters={
+			"published": 1,
+			"enable_esign": 1,
+			"doc_type": doctype
+		},
+		fields=["name", "title", "route"]
+	)
+
+
+@frappe.whitelist()
+def send_esign_email(doctype, docname, webform_name, print_format="Standard", email_message="", recipients=None):
+	"""Send e-signature email with web form link"""
+	if not recipients:
+		frappe.throw("Recipients are required")
+		
+	# Get the document
+	doc = frappe.get_doc(doctype, docname)
+	
+	# Get the web form
+	webform = frappe.get_doc("Web Form", webform_name)
+	if not webform.enable_esign:
+		frappe.throw("Web form does not have e-signature enabled")
+	
+	# Generate the esign link
+	doc_key = doc.get_document_share_key() if hasattr(doc, 'get_document_share_key') else ""
+	esign_url = f"{frappe.utils.get_url()}/{webform.route}/{docname}/edit?key={doc_key}"
+	
+	# Prepare email content
+	subject = f"Electronic Signature Required: {doc.get_title() or docname}"
+	if not email_message:
+		email_message = f"""
+		<p>Hello,</p>
+		<p>You are requested to electronically sign the following document:</p>
+		<p><strong>{doc.get_title() or docname}</strong></p>
+		<p><a href="{esign_url}" class="btn btn-primary">Click here to sign the document</a></p>
+		<p>This link will allow you to view and electronically sign the document.</p>
+		<p>Thank you.</p>
+		"""
+	else:
+		# Append the link to custom message
+		email_message += f'<p><a href="{esign_url}" class="btn btn-primary">Click here to sign the document</a></p>'
+	
+	# Send email to recipients
+	for recipient in recipients:
+		frappe.sendmail(
+			recipients=[recipient],
+			subject=subject,
+			content=email_message,
+			reference_doctype=doctype,
+			reference_name=docname
+		)
+	
+	return {"status": "success", "message": f"E-signature email sent to {len(recipients)} recipient(s)"}
 
 
 @redis_cache(ttl=60 * 60)

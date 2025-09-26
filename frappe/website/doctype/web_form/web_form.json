@@ -33,6 +33,7 @@
   "max_attachment_size",
   "show_attachments",
   "column_break_hhec",
+  "enable_esign",
   "hide_navbar",
   "hide_footer",
   "allowed_embedding_domains",
@@ -423,6 +424,13 @@
   {
    "fieldname": "column_break_hhec",
    "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "Enable electronic signature functionality for this web form. When enabled, users can electronically sign documents using this form.",
+   "fieldname": "enable_esign",
+   "fieldtype": "Check",
+   "label": "Enable eSign"
   }
  ],
  "has_web_view": 1,

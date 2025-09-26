@@ -28,6 +28,7 @@ app_include_js = [
 	"report.bundle.js",
 	"telemetry.bundle.js",
 	"billing.bundle.js",
+	"esign_button.js",
 ]
 
 app_include_css = [
