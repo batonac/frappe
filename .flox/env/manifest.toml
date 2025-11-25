@@ -10,16 +10,21 @@ version = 1
 [install]
 # Python and package management
 python3.pkg-path = "python3"
-python3.version = ">=3.10,<3.15"
+python3.version = "3.11"
+uv.pkg-path = "uv"           # Modern Python package installer
 
 # Web servers
 caddy.pkg-path = "caddy"
 nginx.pkg-path = "nginx"
 
 # Database and cache
-mariadb.pkg-path = "mariadb"
-# libmysqlclient.pkg-path = "libmysqlclient"
+sqlite.pkg-path = "sqlite"
+libmysqlclient.pkg-path = "mariadb-connector-c"
 redis.pkg-path = "redis"
+
+# Pre-built mysqlclient from nixpkgs
+# mysqlclient.pkg-path = "python311Packages.mysqlclient"
+pip.pkg-path = "python311Packages.pip"
 
 # Node.js for socketio
 nodejs.pkg-path = "nodejs_20"
@@ -53,25 +58,30 @@ FRAPPE_STREAM_LOGGING = "1"
 FRAPPE_TUNE_GC = "1"
 LIVE_RELOAD = "1"
 
-# Database configuration
-FRAPPE_DB_HOST = "127.0.0.1"
-FRAPPE_DB_PORT = "3306"
-FRAPPE_DB_TYPE = "mariadb"
-FRAPPE_DB_ROOT_PASSWORD = "frappe"
+# Database configuration (kept for reference)
+# FRAPPE_DB_HOST = "127.0.0.1"
+# FRAPPE_DB_PORT = "3306"
+# FRAPPE_DB_TYPE = "mariadb"
+# FRAPPE_DB_ROOT_PASSWORD = "frappe"
+
+# Database configuration - using SQLite for local dev
+FRAPPE_DB_TYPE = "sqlite"
 
 # Redis configuration (using standard dev container ports)
 FRAPPE_REDIS_CACHE = "redis://127.0.0.1:13000"
 FRAPPE_REDIS_QUEUE = "redis://127.0.0.1:11000"
 FRAPPE_REDIS_SOCKETIO = "redis://127.0.0.1:12000"
 
-# Frappe paths - using .flox/cache for ephemeral data
-FRAPPE_BENCH_ROOT = "$PWD"
+# Frappe paths - FLOX_ENV_CACHE is the bench root
+FRAPPE_BENCH_ROOT = "$FLOX_ENV_CACHE"
 SITES_PATH = "$FLOX_ENV_CACHE/sites"
 FRAPPE_SOCKETIO_PORT = "9000"
 
-# MySQL client build flags for mysqlclient Python package
-MYSQLCLIENT_CFLAGS = "-I$FLOX_ENV/include/mysql"
-MYSQLCLIENT_LDFLAGS = "-L$FLOX_ENV/lib -lmariadb"
+# Enable uv for faster Python package installation
+BENCH_USE_UV = "1"
+
+# MySQL client build configuration for mysqlclient Python package
+MSHEADER = "$FLOX_ENV/include/mysql/mysql.h"
 
 
 ## Activation Hook ---------------------------------------------------
@@ -79,6 +89,23 @@ MYSQLCLIENT_LDFLAGS = "-L$FLOX_ENV/lib -lmariadb"
 ## -------------------------------------------------------------------
 [hook]
 on-activate = """
+  # Create bench directory structure in FLOX_ENV_CACHE (the bench root)
+  mkdir -p "$FLOX_ENV_CACHE"/{sites/assets,config,logs,config/pids}
+  
+  # Symlink frappe source ($PWD) into FLOX_ENV_CACHE/apps/frappe
+  mkdir -p "$FLOX_ENV_CACHE/apps"
+  if [ ! -e "$FLOX_ENV_CACHE/apps/frappe" ]; then
+    ln -sf "$PWD" "$FLOX_ENV_CACHE/apps/frappe"
+  fi
+  
+  # Create convenience symlinks in $PWD for bench directories
+  # These allow running bench commands from the frappe development root
+  for dir in sites config logs; do
+    if [ ! -e "$PWD/$dir" ] || [ ! -L "$PWD/$dir" ]; then
+      ln -sf "$FLOX_ENV_CACHE/$dir" "$PWD/$dir"
+    fi
+  done
+  
   # Setup Python virtual environment
   export PYTHON_DIR="$FLOX_ENV_CACHE/python"
   if [ ! -d "$PYTHON_DIR" ]; then
@@ -89,35 +116,20 @@ on-activate = """
   # Install frappe and dependencies in a subshell
   (
     source "$PYTHON_DIR/bin/activate"
-    # Install/upgrade pip and setuptools
-    pip install --quiet --upgrade pip setuptools wheel
+    # Install/upgrade pip, setuptools, wheel using uv
+    uv pip install --quiet --upgrade pip setuptools wheel --python "$PYTHON_DIR/bin/python"
     
-    # Install frappe in editable mode if pyproject.toml exists
-    if [ -f "pyproject.toml" ]; then
-      pip install -e . --quiet
-    fi
+    # Install frappe in editable mode from $PWD using uv
+    uv pip install -e "$PWD" --quiet --python "$PYTHON_DIR/bin/python"
     
-    # Install bench CLI for convenience
-    pip install frappe-bench --quiet 2>/dev/null || true
+    # Install bench CLI using uv
+    uv pip install frappe-bench --quiet --python "$PYTHON_DIR/bin/python" 2>/dev/null || true
   )
-
-  # Create ephemeral sites directory structure in .flox/cache
-  mkdir -p "$FLOX_ENV_CACHE/sites/assets"
-  mkdir -p "$FLOX_ENV_CACHE/logs"
-  
-  # Create symlink to sites for convenience (if not exists)
-  if [ ! -e "$PWD/sites" ] || [ ! -L "$PWD/sites" ]; then
-    ln -sf "$FLOX_ENV_CACHE/sites" "$PWD/sites"
-  fi
-  
-  # Create symlink to logs for convenience (if not exists)
-  if [ ! -e "$PWD/logs" ] || [ ! -L "$PWD/logs" ]; then
-    ln -sf "$FLOX_ENV_CACHE/logs" "$PWD/logs"
-  fi
   
   # Create site-specific directories if sites exist
   for site in "$FLOX_ENV_CACHE/sites"/*/ ; do
     if [ -d "$site" ] && [ "$(basename "$site")" != "assets" ]; then
+      mkdir -p "$site/db"
       mkdir -p "$site/error-snapshots"
       mkdir -p "$site/indexes"
       mkdir -p "$site/locks"
@@ -127,12 +139,14 @@ on-activate = """
     fi
   done
 
-  echo "✅ Frappe environment ready!"
-  echo "   Sites: $FLOX_ENV_CACHE/sites/ (linked from $PWD/sites)"
-  echo "   Logs: $FLOX_ENV_CACHE/logs/ (linked from $PWD/logs)"
+  echo "✅ Frappe bench environment ready!"
+  echo "   Bench root: $FLOX_ENV_CACHE"
+  echo "   Frappe source: $PWD"
+  echo "   Working directory: $PWD (bench commands work here!)"
+  echo "   Using uv for Python package management"
   echo ""
   echo "💡 Site data is ephemeral and won't be committed to git"
-  echo "💡 Use 'flox services start' to start all services"
+  echo "💡 Run 'flox services start' to start all services"
 """
 
 
@@ -141,85 +155,74 @@ on-activate = """
 ## -------------------------------------------------------------------
 [profile]
 bash = """
-  # Autogenerated by Flox
-
   # Activate Python virtual environment
   source "$PYTHON_DIR/bin/activate"
   
   # Helpful aliases
   alias frappe-shell='python -c "import frappe; frappe.init(site=\"<site-name>\"); frappe.connect()"'
-  alias bench-restore='bench restore --db-root-password frappe'
-  alias bench-new-site='bench new-site --db-root-password frappe --admin-password admin'
+  alias bench-new-site='bench new-site --db-type sqlite --admin-password admin'
   
   echo ""
   echo "╔════════════════════════════════════════════════════════════╗"
   echo "║            Frappe Development Environment                  ║"
+  echo "║                  (SQLite Edition)                          ║"
   echo "╠════════════════════════════════════════════════════════════╣"
   echo "║  Start all services:                                       ║"
   echo "║    flox services start                                     ║"
   echo "║                                                            ║"
   echo "║  Create a new site:                                        ║"
-  echo "║    bench new-site mysite.local --admin-password admin      ║"
+  echo "║    bench new-site mysite.local --db-type sqlite            ║"
   echo "║                                                            ║"
-  echo "║  Restore from backup:                                      ║"
-  echo "║    bench restore <backup.sql.gz>                           ║"
-  echo "║                                                            ║"
-  echo "║  Common commands:                                          ║"
+  echo "║  Common commands (run from $PWD):                          ║"
   echo "║    bench --site <site> migrate                             ║"
   echo "║    bench --site <site> console                             ║"
   echo "║    bench --site <site> clear-cache                         ║"
   echo "╚════════════════════════════════════════════════════════════╝"
+  echo ""
+  echo "Note: Using SQLite for local development."
+  echo "      For production, use MariaDB or PostgreSQL."
   echo ""
 """
 zsh = """
-  # Autogenerated by Flox
-
   # Activate Python virtual environment
   source "$PYTHON_DIR/bin/activate"
   
   # Helpful aliases
   alias frappe-shell='python -c "import frappe; frappe.init(site=\"<site-name>\"); frappe.connect()"'
-  alias bench-restore='bench restore --db-root-password frappe'
-  alias bench-new-site='bench new-site --db-root-password frappe --admin-password admin'
+  alias bench-new-site='bench new-site --db-type sqlite --admin-password admin'
   
   echo ""
   echo "╔════════════════════════════════════════════════════════════╗"
   echo "║            Frappe Development Environment                  ║"
+  echo "║                  (SQLite Edition)                          ║"
   echo "╠════════════════════════════════════════════════════════════╣"
   echo "║  Start all services:                                       ║"
   echo "║    flox services start                                     ║"
   echo "║                                                            ║"
   echo "║  Create a new site:                                        ║"
-  echo "║    bench new-site mysite.local --admin-password admin      ║"
+  echo "║    bench new-site mysite.local --db-type sqlite            ║"
   echo "║                                                            ║"
-  echo "║  Restore from backup:                                      ║"
-  echo "║    bench restore <backup.sql.gz>                           ║"
-  echo "║                                                            ║"
-  echo "║  Common commands:                                          ║"
+  echo "║  Common commands (run from $PWD):                          ║"
   echo "║    bench --site <site> migrate                             ║"
   echo "║    bench --site <site> console                             ║"
   echo "║    bench --site <site> clear-cache                         ║"
   echo "╚════════════════════════════════════════════════════════════╝"
   echo ""
+  echo "Note: Using SQLite for local development."
+  echo "      For production, use MariaDB or PostgreSQL."
+  echo ""
 """
 fish = """
-  # Autogenerated by Flox
-
   # Activate Python virtual environment
   source "$PYTHON_DIR/bin/activate.fish"
   
   # Helpful aliases
   alias frappe-shell 'python -c "import frappe; frappe.init(site=\"<site-name>\"); frappe.connect()"'
-  alias bench-restore 'bench restore --db-root-password frappe'
-  alias bench-new-site 'bench new-site --db-root-password frappe --admin-password admin'
+  alias bench-new-site 'bench new-site --db-type sqlite --admin-password admin'
 """
 tcsh = """
-  # Autogenerated by Flox
-
-  echo "Activating python virtual environment" >&2
+  # Activate Python virtual environment
   source "$PYTHON_DIR/bin/activate.csh"
-
-  # End autogenerated by Flox
 """
 
 
@@ -267,24 +270,24 @@ redis-socketio.command = """
 """
 redis-socketio.is-daemon = true
 
-# MariaDB service with inline configuration
-mariadb.command = """
-  mysqld \
-    --character-set-server=utf8mb4 \
-    --collation-server=utf8mb4_unicode_ci \
-    --skip-character-set-client-handshake \
-    --disable-log-bin \
-    --innodb-buffer-pool-size=256M \
-    --innodb-log-file-size=64M \
-    --max-connections=200 \
-    --innodb-read-only-compressed=OFF \
-    --datadir=$FLOX_ENV_CACHE/mariadb \
-    --socket=$FLOX_ENV_CACHE/mariadb/mysql.sock
-"""
-mariadb.is-daemon = true
+
+# # MariaDB service with inline configuration (kept for reference)
+# mariadb.command = """
+#   mysqld \
+#     --character-set-server=utf8mb4 \
+#     --collation-server=utf8mb4_unicode_ci \
+#     --skip-character-set-client-handshake \
+#     --disable-log-bin \
+#     --innodb-buffer-pool-size=256M \
+#     --innodb-log-file-size=64M \
+#     --max-connections=200 \
+#     --innodb-read-only-compressed=OFF \
+#     --datadir=$FLOX_ENV_CACHE/mariadb \
+#     --socket=$FLOX_ENV_CACHE/mariadb/mysql.sock
+# """
+# mariadb.is-daemon = true
 
 # Frappe web server (gunicorn)
-# Note: Adjust worker count (-w) based on your system
 web.command = """
   cd $FLOX_ENV_CACHE/sites && \
   gunicorn -b 127.0.0.1:8000 \
@@ -312,7 +315,7 @@ worker-long.is-daemon = true
 # Node.js socketio server
 socketio.command = """
   rm -f $FLOX_ENV_CACHE/sites/socketio.sock && \
-  node $PWD/apps/frappe/socketio.js
+  node $PWD/socketio.js
 """
 socketio.is-daemon = true
 
