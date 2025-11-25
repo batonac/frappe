@@ -66,6 +66,7 @@ LIVE_RELOAD = "1"
 
 # Database configuration - using SQLite for local dev
 FRAPPE_DB_TYPE = "sqlite"
+FRAPPE_DB_NAME = "frappe"
 
 # Redis configuration (using standard dev container ports)
 FRAPPE_REDIS_CACHE = "redis://127.0.0.1:13000"
@@ -90,28 +91,34 @@ MSHEADER = "$FLOX_ENV/include/mysql/mysql.h"
 [hook]
 on-activate = """
   # Create bench directory structure in FLOX_ENV_CACHE (the bench root)
-  mkdir -p "$FLOX_ENV_CACHE"/{sites/assets,config,logs,config/pids}
+  mkdir -p "$FLOX_ENV_CACHE"/{apps,sites/assets,config,logs,config/pids}
   
   # Symlink frappe source ($PWD) into FLOX_ENV_CACHE/apps/frappe
   mkdir -p "$FLOX_ENV_CACHE/apps"
   if [ ! -e "$FLOX_ENV_CACHE/apps/frappe" ]; then
     ln -sf "$PWD" "$FLOX_ENV_CACHE/apps/frappe"
   fi
-  
-  # Create convenience symlinks in $PWD for bench directories
-  # These allow running bench commands from the frappe development root
-  for dir in sites config logs; do
-    if [ ! -e "$PWD/$dir" ] || [ ! -L "$PWD/$dir" ]; then
-      ln -sf "$FLOX_ENV_CACHE/$dir" "$PWD/$dir"
-    fi
-  done
+
+  # Provision apps.txt in the sites directory
+  # This allows bench to recognize the frappe app
+  if [ ! -e "$FLOX_ENV_CACHE/sites/apps.txt" ]; then
+    echo "frappe" > "$FLOX_ENV_CACHE/sites/apps.txt"
+  fi
   
   # Setup Python virtual environment
-  export PYTHON_DIR="$FLOX_ENV_CACHE/python"
+  export PYTHON_DIR="$FLOX_ENV_CACHE/env"
   if [ ! -d "$PYTHON_DIR" ]; then
     echo "Creating python virtual environment in $PYTHON_DIR"
     python -m venv "$PYTHON_DIR"
   fi
+  
+  # Create convenience symlinks in $PWD for bench directories
+  # These allow running bench commands from the frappe development root
+  for dir in apps env sites config logs; do
+    if [ ! -e "$PWD/$dir" ] || [ ! -L "$PWD/$dir" ]; then
+      ln -sf "$FLOX_ENV_CACHE/$dir" "$PWD/$dir"
+    fi
+  done
 
   # Install frappe and dependencies in a subshell
   (
@@ -171,7 +178,7 @@ bash = """
   echo "║    flox services start                                     ║"
   echo "║                                                            ║"
   echo "║  Create a new site:                                        ║"
-  echo "║    bench new-site mysite.local --db-type sqlite            ║"
+  echo "║    bench new-site frappe_dev.localhost --db-type sqlite            ║"
   echo "║                                                            ║"
   echo "║  Common commands (run from $PWD):                          ║"
   echo "║    bench --site <site> migrate                             ║"
@@ -200,7 +207,7 @@ zsh = """
   echo "║    flox services start                                     ║"
   echo "║                                                            ║"
   echo "║  Create a new site:                                        ║"
-  echo "║    bench new-site mysite.local --db-type sqlite            ║"
+  echo "║    bench new-site frappe_dev.localhost --db-type sqlite            ║"
   echo "║                                                            ║"
   echo "║  Common commands (run from $PWD):                          ║"
   echo "║    bench --site <site> migrate                             ║"
@@ -315,12 +322,12 @@ worker-long.is-daemon = true
 # Node.js socketio server
 socketio.command = """
   rm -f $FLOX_ENV_CACHE/sites/socketio.sock && \
-  node $PWD/socketio.js
+  node $FLOX_ENV_PROJECT/socketio.js
 """
 socketio.is-daemon = true
 
 # Caddy frontend (if config/Caddyfile exists)
-caddy.command = "caddy run --config $PWD/config/Caddyfile"
+caddy.command = "caddy run --config $FLOX_ENV_PROJECT/.flox/env/Caddyfile"
 caddy.is-daemon = true
 
 
