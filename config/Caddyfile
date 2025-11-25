@@ -1,0 +1,14 @@
+:8080 {
+	root * sites
+
+	# Serve static files
+	@static {
+		path /assets/* /files/* /private/files/*
+	}
+	handle @static {
+		file_server
+	}
+
+	# Proxy to gunicorn
+	reverse_proxy localhost:8000
+}
