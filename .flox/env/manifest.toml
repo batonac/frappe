@@ -25,6 +25,7 @@ redis.pkg-path = "redis"
 # Pre-built mysqlclient from nixpkgs
 # mysqlclient.pkg-path = "python311Packages.mysqlclient"
 pip.pkg-path = "python311Packages.pip"
+gunicorn.pkg-path = "python311Packages.gunicorn"
 
 # Node.js for socketio
 nodejs.pkg-path = "nodejs_20"
@@ -44,6 +45,7 @@ poppler_utils.pkg-path = "poppler_utils" # for PDF processing
 git.pkg-path = "git"
 curl.pkg-path = "curl"
 gnused.pkg-path = "gnused"
+just.pkg-path = "just"
 
 
 ## Environment Variables ---------------------------------------------
@@ -253,6 +255,7 @@ redis-cache.command = """
     --maxmemory-policy allkeys-lru
 """
 redis-cache.is-daemon = true
+redis-cache.shutdown.command = "redis-cli -p 13000 shutdown"
 
 redis-queue.command = """
   mkdir -p $FLOX_ENV_CACHE/sites && \
@@ -267,6 +270,7 @@ redis-queue.command = """
     --appendonly no
 """
 redis-queue.is-daemon = true
+redis-queue.shutdown.command = "redis-cli -p 11000 shutdown"
 
 redis-socketio.command = """
   mkdir -p $FLOX_ENV_CACHE/sites && \
@@ -279,6 +283,7 @@ redis-socketio.command = """
     --appendonly no
 """
 redis-socketio.is-daemon = true
+redis-socketio.shutdown.command = "redis-cli -p 12000 shutdown"
 
 
 # # MariaDB service with inline configuration (kept for reference)
@@ -310,17 +315,21 @@ web.command = """
     frappe.app:application
 """
 web.is-daemon = true
+web.shutdown.command = "pkill -f 'gunicorn.*frappe.app:application'"
 
 # Frappe scheduler
 scheduler.command = "bench schedule"
 scheduler.is-daemon = true
+scheduler.shutdown.command = "pkill -f 'bench schedule'"
 
 # Background workers
 worker-short.command = "bench worker --queue short,default"
 worker-short.is-daemon = true
+worker-short.shutdown.command = "pkill -f 'bench worker.*short,default'"
 
 worker-long.command = "bench worker --queue long,default,short"
 worker-long.is-daemon = true
+worker-long.shutdown.command = "pkill -f 'bench worker.*long,default,short'"
 
 # Node.js socketio server
 socketio.command = """
@@ -328,10 +337,12 @@ socketio.command = """
   node $FLOX_ENV_PROJECT/socketio.js
 """
 socketio.is-daemon = true
+socketio.shutdown.command = "pkill -f 'node.*socketio.js'"
 
 # Caddy frontend (if config/Caddyfile exists)
 caddy.command = "caddy run --config $FLOX_ENV_PROJECT/.flox/env/Caddyfile"
 caddy.is-daemon = true
+caddy.shutdown.command = "caddy stop"
 
 
 ## Include ----------------------------------------------------------

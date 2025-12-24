@@ -21,6 +21,12 @@
       "gnused": {
         "pkg-path": "gnused"
       },
+      "gunicorn": {
+        "pkg-path": "python311Packages.gunicorn"
+      },
+      "just": {
+        "pkg-path": "just"
+      },
       "libffi": {
         "pkg-path": "libffi"
       },
@@ -99,39 +105,66 @@
     "services": {
       "caddy": {
         "command": "caddy run --config $FLOX_ENV_PROJECT/.flox/env/Caddyfile",
-        "is-daemon": true
+        "is-daemon": true,
+        "shutdown": {
+          "command": "caddy stop"
+        }
       },
       "redis-cache": {
         "command": "  mkdir -p $FLOX_ENV_CACHE/sites && redis-server --port 13000 --bind 127.0.0.1 --dir $FLOX_ENV_CACHE/sites --dbfilename cache.rdb --save \"\" --appendonly no --maxmemory 500mb --maxmemory-policy allkeys-lru\n",
-        "is-daemon": true
+        "is-daemon": true,
+        "shutdown": {
+          "command": "redis-cli -p 13000 shutdown"
+        }
       },
       "redis-queue": {
         "command": "  mkdir -p $FLOX_ENV_CACHE/sites && redis-server --port 11000 --bind 127.0.0.1 --dir $FLOX_ENV_CACHE/sites --dbfilename queue.rdb --save 900 1 --save 300 10 --save 60 10000 --appendonly no\n",
-        "is-daemon": true
+        "is-daemon": true,
+        "shutdown": {
+          "command": "redis-cli -p 11000 shutdown"
+        }
       },
       "redis-socketio": {
         "command": "  mkdir -p $FLOX_ENV_CACHE/sites && redis-server --port 12000 --bind 127.0.0.1 --dir $FLOX_ENV_CACHE/sites --dbfilename socketio.rdb --save \"\" --appendonly no\n",
-        "is-daemon": true
+        "is-daemon": true,
+        "shutdown": {
+          "command": "redis-cli -p 12000 shutdown"
+        }
       },
       "scheduler": {
         "command": "bench schedule",
-        "is-daemon": true
+        "is-daemon": true,
+        "shutdown": {
+          "command": "pkill -f 'bench schedule'"
+        }
       },
       "socketio": {
         "command": "  rm -f $FLOX_ENV_CACHE/sites/socketio.sock && node $FLOX_ENV_PROJECT/socketio.js\n",
-        "is-daemon": true
+        "is-daemon": true,
+        "shutdown": {
+          "command": "pkill -f 'node.*socketio.js'"
+        }
       },
       "web": {
         "command": "  cd $FLOX_ENV_CACHE/sites && gunicorn -b 127.0.0.1:8000 -w 4 --max-requests 5000 --max-requests-jitter 500 -t 120 --graceful-timeout 30 --preload frappe.app:application\n",
-        "is-daemon": true
+        "is-daemon": true,
+        "shutdown": {
+          "command": "pkill -f 'gunicorn.*frappe.app:application'"
+        }
       },
       "worker-long": {
         "command": "bench worker --queue long,default,short",
-        "is-daemon": true
+        "is-daemon": true,
+        "shutdown": {
+          "command": "pkill -f 'bench worker.*long,default,short'"
+        }
       },
       "worker-short": {
         "command": "bench worker --queue short,default",
-        "is-daemon": true
+        "is-daemon": true,
+        "shutdown": {
+          "command": "pkill -f 'bench worker.*short,default'"
+        }
       }
     },
     "build": {
@@ -916,6 +949,262 @@
       "outputs": {
         "info": "/nix/store/i5siv2j9ccda8h9na76xgn510xpxmqma-gnused-4.9-info",
         "out": "/nix/store/ks6c62g0m3gqrs5i7m0cv6d6aqhdvirn-gnused-4.9"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "python311Packages.gunicorn",
+      "broken": false,
+      "derivation": "/nix/store/96yk0vyz19ygd0lmwza7hf8agc7nkw9i-python3.11-gunicorn-21.2.0.drv",
+      "description": "gunicorn 'Green Unicorn' is a WSGI HTTP Server for UNIX, fast clients and sleepy applications",
+      "install_id": "gunicorn",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "name": "python3.11-gunicorn-21.2.0",
+      "pname": "gunicorn",
+      "rev": "9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "rev_count": 647193,
+      "rev_date": "2024-07-03T18:27:49Z",
+      "scrape_date": "2024-07-05T00:14:29Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "21.2.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dist": "/nix/store/43bhcac2060pvhkxdcs04j1d9gzjzbwy-python3.11-gunicorn-21.2.0-dist",
+        "out": "/nix/store/gbh80zpvq7fhyhl89blfv9vk5c7h8c53-python3.11-gunicorn-21.2.0"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "python311Packages.gunicorn",
+      "broken": false,
+      "derivation": "/nix/store/4k95nfzx57nnxllp0j7bf2n5jjfilj3x-python3.11-gunicorn-21.2.0.drv",
+      "description": "gunicorn 'Green Unicorn' is a WSGI HTTP Server for UNIX, fast clients and sleepy applications",
+      "install_id": "gunicorn",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "name": "python3.11-gunicorn-21.2.0",
+      "pname": "gunicorn",
+      "rev": "9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "rev_count": 647193,
+      "rev_date": "2024-07-03T18:27:49Z",
+      "scrape_date": "2024-07-05T00:14:29Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "21.2.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dist": "/nix/store/vjah84x9zcg5pzbpk1mfw1k88jb9lzbm-python3.11-gunicorn-21.2.0-dist",
+        "out": "/nix/store/c1wfiwm2ax2f3flh4phh68sazng91sc6-python3.11-gunicorn-21.2.0"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "python311Packages.gunicorn",
+      "broken": false,
+      "derivation": "/nix/store/98cvbg20ka03s5ij4w7xdl84whf4vwpb-python3.11-gunicorn-21.2.0.drv",
+      "description": "gunicorn 'Green Unicorn' is a WSGI HTTP Server for UNIX, fast clients and sleepy applications",
+      "install_id": "gunicorn",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "name": "python3.11-gunicorn-21.2.0",
+      "pname": "gunicorn",
+      "rev": "9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "rev_count": 647193,
+      "rev_date": "2024-07-03T18:27:49Z",
+      "scrape_date": "2024-07-05T00:14:29Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "21.2.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dist": "/nix/store/d0zc40f1pc411m6brkcf5ck621lw3qd0-python3.11-gunicorn-21.2.0-dist",
+        "out": "/nix/store/485p5wras19nf05g9val2j5vhakml28a-python3.11-gunicorn-21.2.0"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "python311Packages.gunicorn",
+      "broken": false,
+      "derivation": "/nix/store/ay87rhwsfr7wlrz0zfhlzpgsv6c2kjvm-python3.11-gunicorn-21.2.0.drv",
+      "description": "gunicorn 'Green Unicorn' is a WSGI HTTP Server for UNIX, fast clients and sleepy applications",
+      "install_id": "gunicorn",
+      "license": "MIT",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "name": "python3.11-gunicorn-21.2.0",
+      "pname": "gunicorn",
+      "rev": "9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "rev_count": 647193,
+      "rev_date": "2024-07-03T18:27:49Z",
+      "scrape_date": "2024-07-05T00:14:29Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "21.2.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dist": "/nix/store/bjk8rg1y2a6wi49zjamq2bwhg3sakaq3-python3.11-gunicorn-21.2.0-dist",
+        "out": "/nix/store/7abksi7h0b8nwza1574fmfg0fmb4jcf0-python3.11-gunicorn-21.2.0"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "just",
+      "broken": false,
+      "derivation": "/nix/store/sxzqggxlzbpxdwnallxppp9kgnj0779h-just-1.29.1.drv",
+      "description": "Handy way to save and run project-specific commands",
+      "install_id": "just",
+      "license": "CC0-1.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "name": "just-1.29.1",
+      "pname": "just",
+      "rev": "9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "rev_count": 647193,
+      "rev_date": "2024-07-03T18:27:49Z",
+      "scrape_date": "2024-07-05T00:14:29Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.29.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/pjh4iz8aygfnn7q3cl2hh7x8mxqybvjk-just-1.29.1-doc",
+        "man": "/nix/store/9cqkhmkrph792j417sixmw9cxshmnvi3-just-1.29.1-man",
+        "out": "/nix/store/5zn47avh9j0md9wxnsgzwr11pj2ix2x9-just-1.29.1"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "just",
+      "broken": false,
+      "derivation": "/nix/store/5c5dpph58s9phncvxpc5mvcb652dc0nn-just-1.29.1.drv",
+      "description": "Handy way to save and run project-specific commands",
+      "install_id": "just",
+      "license": "CC0-1.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "name": "just-1.29.1",
+      "pname": "just",
+      "rev": "9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "rev_count": 647193,
+      "rev_date": "2024-07-03T18:27:49Z",
+      "scrape_date": "2024-07-05T00:14:29Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.29.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/3nb84vcg0k6j5d07c6slgdjayfm3sik0-just-1.29.1-doc",
+        "man": "/nix/store/a5wvrxl80szwdqphwxj3rmzkji3kl7kz-just-1.29.1-man",
+        "out": "/nix/store/379bkcb9c48xjdijqa50chlg55k8yh7c-just-1.29.1"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "just",
+      "broken": false,
+      "derivation": "/nix/store/4qarmndbxq1nlc95gqdd9wzw49rwkwcx-just-1.29.1.drv",
+      "description": "Handy way to save and run project-specific commands",
+      "install_id": "just",
+      "license": "CC0-1.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "name": "just-1.29.1",
+      "pname": "just",
+      "rev": "9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "rev_count": 647193,
+      "rev_date": "2024-07-03T18:27:49Z",
+      "scrape_date": "2024-07-05T00:14:29Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.29.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/7rpaa0bplkr3kkhqahwhk8y21p8lwqdq-just-1.29.1-doc",
+        "man": "/nix/store/5ghn5mri0by2y658mx1y3b3rl463is42-just-1.29.1-man",
+        "out": "/nix/store/b769zakq7glzxxf2y1vvlhmp8yh8a15a-just-1.29.1"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "just",
+      "broken": false,
+      "derivation": "/nix/store/wpxdpg09blfx9gg4b1qby1135dzs5ckd-just-1.29.1.drv",
+      "description": "Handy way to save and run project-specific commands",
+      "install_id": "just",
+      "license": "CC0-1.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "name": "just-1.29.1",
+      "pname": "just",
+      "rev": "9f4128e00b0ae8ec65918efeba59db998750ead6",
+      "rev_count": 647193,
+      "rev_date": "2024-07-03T18:27:49Z",
+      "scrape_date": "2024-07-05T00:14:29Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.29.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/ly4zz6ksh34j74sb08vsc3hjnc8h3sa1-just-1.29.1-doc",
+        "man": "/nix/store/c7cqyjqq64w23q4xjzlxk73aj3a0sybi-just-1.29.1-man",
+        "out": "/nix/store/i1873qgj1pg60af9vc0gpjw79fk5mpjq-just-1.29.1"
       },
       "system": "x86_64-linux",
       "group": "toplevel",
