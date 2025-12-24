@@ -241,6 +241,7 @@ tcsh = """
 [services]
 # Redis services - using command-line flags instead of config files
 redis-cache.command = """
+  mkdir -p $FLOX_ENV_CACHE/sites && \
   redis-server \
     --port 13000 \
     --bind 127.0.0.1 \
@@ -254,6 +255,7 @@ redis-cache.command = """
 redis-cache.is-daemon = true
 
 redis-queue.command = """
+  mkdir -p $FLOX_ENV_CACHE/sites && \
   redis-server \
     --port 11000 \
     --bind 127.0.0.1 \
@@ -262,11 +264,12 @@ redis-queue.command = """
     --save 900 1 \
     --save 300 10 \
     --save 60 10000 \
-    --appendonly yes
+    --appendonly no
 """
 redis-queue.is-daemon = true
 
 redis-socketio.command = """
+  mkdir -p $FLOX_ENV_CACHE/sites && \
   redis-server \
     --port 12000 \
     --bind 127.0.0.1 \

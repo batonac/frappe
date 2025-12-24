@@ -102,15 +102,15 @@
         "is-daemon": true
       },
       "redis-cache": {
-        "command": "  redis-server --port 13000 --bind 127.0.0.1 --dir $FLOX_ENV_CACHE/sites --dbfilename cache.rdb --save \"\" --appendonly no --maxmemory 500mb --maxmemory-policy allkeys-lru\n",
+        "command": "  mkdir -p $FLOX_ENV_CACHE/sites && redis-server --port 13000 --bind 127.0.0.1 --dir $FLOX_ENV_CACHE/sites --dbfilename cache.rdb --save \"\" --appendonly no --maxmemory 500mb --maxmemory-policy allkeys-lru\n",
         "is-daemon": true
       },
       "redis-queue": {
-        "command": "  redis-server --port 11000 --bind 127.0.0.1 --dir $FLOX_ENV_CACHE/sites --dbfilename queue.rdb --save 900 1 --save 300 10 --save 60 10000 --appendonly yes\n",
+        "command": "  mkdir -p $FLOX_ENV_CACHE/sites && redis-server --port 11000 --bind 127.0.0.1 --dir $FLOX_ENV_CACHE/sites --dbfilename queue.rdb --save 900 1 --save 300 10 --save 60 10000 --appendonly no\n",
         "is-daemon": true
       },
       "redis-socketio": {
-        "command": "  redis-server --port 12000 --bind 127.0.0.1 --dir $FLOX_ENV_CACHE/sites --dbfilename socketio.rdb --save \"\" --appendonly no\n",
+        "command": "  mkdir -p $FLOX_ENV_CACHE/sites && redis-server --port 12000 --bind 127.0.0.1 --dir $FLOX_ENV_CACHE/sites --dbfilename socketio.rdb --save \"\" --appendonly no\n",
         "is-daemon": true
       },
       "scheduler": {
