@@ -9,8 +9,8 @@ version = 1
 ## -------------------------------------------------------------------
 [install]
 # Python and package management
-python3.pkg-path = "python3"
-python3.version = "3.11"
+python3.pkg-path = "python314"
+# python3.version = "3.14.0"
 uv.pkg-path = "uv"           # Modern Python package installer
 
 # Web servers
@@ -71,14 +71,14 @@ FRAPPE_DB_TYPE = "sqlite"
 FRAPPE_DB_NAME = "frappe"
 
 # Redis configuration (using standard dev container ports)
-FRAPPE_REDIS_CACHE = "redis://127.0.0.1:13000"
-FRAPPE_REDIS_QUEUE = "redis://127.0.0.1:11000"
-FRAPPE_REDIS_SOCKETIO = "redis://127.0.0.1:12000"
+FRAPPE_REDIS_CACHE = "redis://127.0.0.1:13080"
+FRAPPE_REDIS_QUEUE = "redis://127.0.0.1:11080"
+FRAPPE_REDIS_SOCKETIO = "redis://127.0.0.1:12080"
 
 # Frappe paths - FLOX_ENV_CACHE is the bench root
 FRAPPE_BENCH_ROOT = "$FLOX_ENV_CACHE"
 SITES_PATH = "$FLOX_ENV_CACHE/sites"
-FRAPPE_SOCKETIO_PORT = "9000"
+FRAPPE_SOCKETIO_PORT = "9080"
 
 # Enable uv for faster Python package installation
 BENCH_USE_UV = "1"
@@ -245,7 +245,7 @@ tcsh = """
 redis-cache.command = """
   mkdir -p $FLOX_ENV_CACHE/sites && \
   redis-server \
-    --port 13000 \
+    --port 13080 \
     --bind 127.0.0.1 \
     --dir $FLOX_ENV_CACHE/sites \
     --dbfilename cache.rdb \
@@ -255,12 +255,12 @@ redis-cache.command = """
     --maxmemory-policy allkeys-lru
 """
 redis-cache.is-daemon = true
-redis-cache.shutdown.command = "redis-cli -p 13000 shutdown"
+redis-cache.shutdown.command = "redis-cli -p 13080 shutdown"
 
 redis-queue.command = """
   mkdir -p $FLOX_ENV_CACHE/sites && \
   redis-server \
-    --port 11000 \
+    --port 11080 \
     --bind 127.0.0.1 \
     --dir $FLOX_ENV_CACHE/sites \
     --dbfilename queue.rdb \
@@ -270,12 +270,12 @@ redis-queue.command = """
     --appendonly no
 """
 redis-queue.is-daemon = true
-redis-queue.shutdown.command = "redis-cli -p 11000 shutdown"
+redis-queue.shutdown.command = "redis-cli -p 11080 shutdown"
 
 redis-socketio.command = """
   mkdir -p $FLOX_ENV_CACHE/sites && \
   redis-server \
-    --port 12000 \
+    --port 12080 \
     --bind 127.0.0.1 \
     --dir $FLOX_ENV_CACHE/sites \
     --dbfilename socketio.rdb \
@@ -283,7 +283,7 @@ redis-socketio.command = """
     --appendonly no
 """
 redis-socketio.is-daemon = true
-redis-socketio.shutdown.command = "redis-cli -p 12000 shutdown"
+redis-socketio.shutdown.command = "redis-cli -p 12080 shutdown"
 
 
 # # MariaDB service with inline configuration (kept for reference)
