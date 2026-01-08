@@ -11,6 +11,8 @@ version = 1
 # Python and package management
 python3.pkg-path = "python314"
 # python3.version = "3.14.0"
+# python3.systems = ["x86_64-linux", "aarch64-darwin"]
+
 uv.pkg-path = "uv"           # Modern Python package installer
 
 # Web servers
@@ -23,12 +25,12 @@ libmysqlclient.pkg-path = "mariadb-connector-c"
 redis.pkg-path = "redis"
 
 # Pre-built mysqlclient from nixpkgs
-# mysqlclient.pkg-path = "python311Packages.mysqlclient"
-pip.pkg-path = "python311Packages.pip"
-gunicorn.pkg-path = "python311Packages.gunicorn"
+mysqlclient.pkg-path = "python314Packages.mysqlclient"
+pip.pkg-path = "python314Packages.pip"
+gunicorn.pkg-path = "python314Packages.gunicorn"
 
 # Node.js for socketio
-nodejs.pkg-path = "nodejs_20"
+nodejs.pkg-path = "nodejs_24"
 
 # Build dependencies for Python packages
 gcc.pkg-path = "gcc"
@@ -39,7 +41,7 @@ libffi.pkg-path = "libffi"
 
 # Additional dependencies for Frappe (from devcontainer)
 cups.pkg-path = "cups"                   # for libcups2-dev equivalent
-poppler_utils.pkg-path = "poppler_utils" # for PDF processing
+poppler-utils.pkg-path = "poppler-utils" # for PDF processing
 
 # Useful utilities
 git.pkg-path = "git"
