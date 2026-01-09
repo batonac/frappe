@@ -58,12 +58,16 @@ just.pkg-path = "just"
 # Frappe environment variables
 BENCH_SERVICE_MANAGER = "flox"
 BENCH_SERVICE_MANAGER_COMMAND = "services start"
-NO_SERVICE_RESTART = "1"
-FRAPPE_ENV_TYPE = "development"
 DEV_SERVER = "1"
+FRAPPE_ENV_TYPE = "development"
 FRAPPE_STREAM_LOGGING = "1"
 FRAPPE_TUNE_GC = "1"
 LIVE_RELOAD = "1"
+NO_SERVICE_RESTART = "1"
+# disable a few optional services
+USE_PROFILER = ""
+USE_PROXY = ""
+NO_STATICS = ""
 
 # Database configuration - using SQLite for local dev
 FRAPPE_DB_TYPE = "sqlite"
@@ -87,11 +91,13 @@ SITES_PATH = "$FLOX_ENV_CACHE/sites"
 
 # Unix socket paths for services
 FRAPPE_SOCKETS_DIR = "$FLOX_ENV_CACHE/sockets"
-FRAPPE_WEB_SOCKET = "$FLOX_ENV_CACHE/sockets/frappe.sock"
-FRAPPE_SOCKETIO_UDS = "$FLOX_ENV_CACHE/sockets/socketio.sock"
+FRAPPE_WEB_SOCKET = "$FRAPPE_SOCKETS_DIR/frappe.sock"
+FRAPPE_SOCKETIO_UDS = "$FRAPPE_SOCKETS_DIR/socketio.sock"
 
 # Caddy is the only service with an external port
 FRAPPE_WEBSERVER_PORT = "8888"
+# Tell the browser client to connect to socketio through Caddy (same port)
+FRAPPE_SOCKETIO_PORT = "8888"
 
 # Enable uv for faster Python package installation
 BENCH_USE_UV = "1"
