@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frappe-web
+  labels:
+    app: frappe
+    component: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frappe
+      component: web
+  template:
+    metadata:
+      labels:
+        app: frappe
+        component: web
+      annotations:
+        # Specify the FloxHub environment
+        flox.dev/environment: "your-org/frappe-runtime"
+        # Use dev mode if you need build tools available
+        # flox.dev/activate-mode: "dev"
+    spec:
+      runtimeClassName: flox
+      containers:
+        - name: web
+          image: flox/empty:1.0.0
+          command:
+            - gunicorn
+            - --bind=0.0.0.0:8000
+            - --workers=4
+            - --timeout=120
+            - --preload
+            - frappe.app:application
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: FRAPPE_BENCH_ROOT
+              value: "/home/frappe/frappe-bench"
+            - name: SITES_PATH
+              value: "/home/frappe/frappe-bench/sites"
+            - name: FRAPPE_DB_TYPE
+              value: "mariadb"
+            - name: FRAPPE_DB_HOST
+              value: "mariadb"
+            - name: FRAPPE_REDIS_CACHE
+              value: "redis://redis-cache:6379"
+            - name: FRAPPE_REDIS_QUEUE
+              value: "redis://redis-queue:6379"
+            - name: FRAPPE_REDIS_SOCKETIO
+              value: "redis://redis-socketio:6379"
+          envFrom:
+            - secretRef:
+                name: frappe-db-credentials
+          volumeMounts:
+            - name: sites
+              mountPath: /home/frappe/frappe-bench/sites
+            - name: apps
+              mountPath: /home/frappe/frappe-bench/apps
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          livenessProbe:
+            httpGet:
+              path: /api/method/ping
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/method/ping
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: sites
+          persistentVolumeClaim:
+            claimName: frappe-sites
+        - name: apps
+          persistentVolumeClaim:
+            claimName: frappe-apps
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frappe-web
+spec:
+  selector:
+    app: frappe
+    component: web
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http

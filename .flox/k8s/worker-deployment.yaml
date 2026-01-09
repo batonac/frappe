@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frappe-worker-default
+  labels:
+    app: frappe
+    component: worker
+    queue: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frappe
+      component: worker
+      queue: default
+  template:
+    metadata:
+      labels:
+        app: frappe
+        component: worker
+        queue: default
+      annotations:
+        flox.dev/environment: "your-org/frappe-runtime"
+    spec:
+      runtimeClassName: flox
+      containers:
+        - name: worker
+          image: flox/empty:1.0.0
+          command:
+            - bench
+            - worker
+            - --queue
+            - default,short,long
+          env:
+            - name: FRAPPE_BENCH_ROOT
+              value: "/home/frappe/frappe-bench"
+            - name: SITES_PATH
+              value: "/home/frappe/frappe-bench/sites"
+            - name: FRAPPE_DB_TYPE
+              value: "mariadb"
+            - name: FRAPPE_DB_HOST
+              value: "mariadb"
+            - name: FRAPPE_REDIS_CACHE
+              value: "redis://redis-cache:6379"
+            - name: FRAPPE_REDIS_QUEUE
+              value: "redis://redis-queue:6379"
+            - name: FRAPPE_REDIS_SOCKETIO
+              value: "redis://redis-socketio:6379"
+          envFrom:
+            - secretRef:
+                name: frappe-db-credentials
+          volumeMounts:
+            - name: sites
+              mountPath: /home/frappe/frappe-bench/sites
+            - name: apps
+              mountPath: /home/frappe/frappe-bench/apps
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+      volumes:
+        - name: sites
+          persistentVolumeClaim:
+            claimName: frappe-sites
+        - name: apps
+          persistentVolumeClaim:
+            claimName: frappe-apps

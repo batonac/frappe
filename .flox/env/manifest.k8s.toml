@@ -1,0 +1,111 @@
+## Flox Environment Manifest for Frappe - Kubernetes Runtime
+## This manifest is designed for use with Flox Imageless Kubernetes
+version = 1
+
+[install]
+# Python runtime
+python3.pkg-path = "python314"
+uv.pkg-path = "uv"
+
+# Database and cache clients
+sqlite.pkg-path = "sqlite"
+libmysqlclient.pkg-path = "mariadb-connector-c"
+redis.pkg-path = "redis"
+
+# Pre-built Python packages
+mysqlclient.pkg-path = "python314Packages.mysqlclient"
+pip.pkg-path = "python314Packages.pip"
+gunicorn.pkg-path = "python314Packages.gunicorn"
+
+# Node.js for socketio
+nodejs.pkg-path = "nodejs_24"
+
+# Build dependencies
+gcc.pkg-path = "gcc"
+pkg-config.pkg-path = "pkg-config"
+openssl.pkg-path = "openssl"
+zlib.pkg-path = "zlib"
+libffi.pkg-path = "libffi"
+
+# Runtime dependencies
+cups.pkg-path = "cups"
+poppler-utils.pkg-path = "poppler-utils"
+git.pkg-path = "git"
+curl.pkg-path = "curl"
+
+[vars]
+# These would be overridden by Kubernetes ConfigMaps/Secrets
+FRAPPE_ENV_TYPE = "production"
+
+# Database - expect these from K8s secrets/configmaps
+# FRAPPE_DB_TYPE = "mariadb"
+# FRAPPE_DB_HOST = "mariadb-service"
+# FRAPPE_DB_PORT = "3306"
+# FRAPPE_DB_NAME = "frappe"
+# FRAPPE_DB_USER = "frappe"
+# FRAPPE_DB_PASSWORD = "" # from secret
+
+# Redis - expect service DNS names from K8s
+# FRAPPE_REDIS_CACHE = "redis://redis-cache:6379"
+# FRAPPE_REDIS_QUEUE = "redis://redis-queue:6379"
+# FRAPPE_REDIS_SOCKETIO = "redis://redis-socketio:6379"
+
+# Paths - use standard container paths
+FRAPPE_BENCH_ROOT = "/home/frappe/frappe-bench"
+SITES_PATH = "/home/frappe/frappe-bench/sites"
+
+# Disable dev features
+DEV_SERVER = ""
+LIVE_RELOAD = ""
+
+[hook]
+on-activate = """
+  # Ensure required directories exist
+  mkdir -p "$FRAPPE_BENCH_ROOT"/{apps,sites,logs,config}
+  
+  # Setup Python virtual environment if not exists
+  export PYTHON_DIR="$FRAPPE_BENCH_ROOT/env"
+  if [ ! -d "$PYTHON_DIR" ]; then
+    python -m venv "$PYTHON_DIR"
+  fi
+  
+  # Add venv to PATH
+  export PATH="$PYTHON_DIR/bin:$PATH"
+  export VIRTUAL_ENV="$PYTHON_DIR"
+  
+  # Install dependencies if frappe is present in apps
+  if [ -d "$FRAPPE_BENCH_ROOT/apps/frappe" ]; then
+    (
+      uv pip install --quiet --upgrade pip setuptools wheel --python "$PYTHON_DIR/bin/python"
+      
+      # Install all apps in editable mode
+      for app in "$FRAPPE_BENCH_ROOT/apps"/*; do
+        if [ -d "$app" ] && [ -f "$app/pyproject.toml" ] || [ -f "$app/setup.py" ]; then
+          uv pip install -e "$app" --quiet --python "$PYTHON_DIR/bin/python" 2>/dev/null || true
+        fi
+      done
+      
+      # Install bench if not present
+      if ! command -v bench &> /dev/null; then
+        uv pip install frappe-bench --quiet --python "$PYTHON_DIR/bin/python"
+      fi
+    )
+  fi
+"""
+
+[profile]
+common = """
+  # Activate Python venv
+  export PYTHON_DIR="$FRAPPE_BENCH_ROOT/env"
+  if [ -d "$PYTHON_DIR" ]; then
+    export PATH="$PYTHON_DIR/bin:$PATH"
+    export VIRTUAL_ENV="$PYTHON_DIR"
+  fi
+"""
+
+# No services defined - each service runs as separate K8s deployment
+
+[options]
+systems = ["aarch64-linux", "x86_64-linux"]
+# Use run mode for production - only expose installed packages, not dev deps
+activate.mode = "run"
