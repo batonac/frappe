@@ -64,28 +64,33 @@ DEV_SERVER = "1"
 FRAPPE_STREAM_LOGGING = "1"
 FRAPPE_TUNE_GC = "1"
 LIVE_RELOAD = "1"
-# SHELL = "/usr/bin/env bash"
-
-# Database configuration (kept for reference)
-# FRAPPE_DB_HOST = "127.0.0.1"
-# FRAPPE_DB_PORT = "3306"
-# FRAPPE_DB_TYPE = "mariadb"
-# FRAPPE_DB_ROOT_PASSWORD = "frappe"
 
 # Database configuration - using SQLite for local dev
 FRAPPE_DB_TYPE = "sqlite"
 FRAPPE_DB_NAME = "frappe"
 
-# Redis configuration (using standard dev container ports)
-FRAPPE_REDIS_CACHE = "redis://127.0.0.1:13080"
-FRAPPE_REDIS_QUEUE = "redis://127.0.0.1:11080"
-FRAPPE_REDIS_SOCKETIO = "redis://127.0.0.1:12080"
+# Database configuration for MariaDB (kept for reference)
+# FRAPPE_DB_HOST = "127.0.0.1"
+# FRAPPE_DB_PORT = "3306"
+# FRAPPE_DB_TYPE = "mariadb"
+# FRAPPE_DB_ROOT_PASSWORD = "frappe"
+# FRAPPE_DB_SOCKET = "$FLOX_ENV_CACHE/sockets/mariadb.sock"
+
+# Redis configuration - using Unix sockets
+FRAPPE_REDIS_CACHE = "unix://$FLOX_ENV_CACHE/sockets/redis-cache.sock"
+FRAPPE_REDIS_QUEUE = "unix://$FLOX_ENV_CACHE/sockets/redis-queue.sock"
+FRAPPE_REDIS_SOCKETIO = "unix://$FLOX_ENV_CACHE/sockets/redis-socketio.sock"
 
 # Frappe paths - FLOX_ENV_CACHE is the bench root
 FRAPPE_BENCH_ROOT = "$FLOX_ENV_CACHE"
 SITES_PATH = "$FLOX_ENV_CACHE/sites"
-FRAPPE_SOCKETIO_PORT = "9080"
-FRAPPE_APP_PORT = "8000"
+
+# Unix socket paths for services
+FRAPPE_SOCKETS_DIR = "$FLOX_ENV_CACHE/sockets"
+FRAPPE_WEB_SOCKET = "$FLOX_ENV_CACHE/sockets/frappe.sock"
+FRAPPE_SOCKETIO_UDS = "$FLOX_ENV_CACHE/sockets/socketio.sock"
+
+# Caddy is the only service with an external port
 FRAPPE_WEBSERVER_PORT = "8888"
 
 # Enable uv for faster Python package installation
@@ -101,7 +106,7 @@ MSHEADER = "$FLOX_ENV/include/mysql/mysql.h"
 [hook]
 on-activate = """
   # Create bench directory structure in FLOX_ENV_CACHE (the bench root)
-  mkdir -p "$FLOX_ENV_CACHE"/{apps,sites/assets,config,logs,config/pids}
+  mkdir -p "$FLOX_ENV_CACHE"/{apps,sites/assets,config,logs,config/pids,sockets}
   
   # Symlink frappe source ($FLOX_ENV_PROJECT) into FLOX_ENV_CACHE/apps/frappe
   mkdir -p "$FLOX_ENV_CACHE/apps"
@@ -196,10 +201,11 @@ common = """
   echo "" >&2
   echo "✅ Frappe bench environment ready!" >&2
   echo "   Bench root: $FLOX_ENV_CACHE" >&2
+  echo "   Sockets: $FLOX_ENV_CACHE/sockets/" >&2
   echo "   Using uv for Python package management" >&2
   echo "" >&2
-  echo "Note: Using SQLite for local development." >&2
-  echo "      For production, use MariaDB or PostgreSQL." >&2
+  echo "Note: All services use Unix sockets (except Caddy on port $FRAPPE_WEBSERVER_PORT)" >&2
+  echo "      Using SQLite for local development." >&2
   echo "" >&2
   echo "💡 Site data is ephemeral and won't be committed to git" >&2
   echo "💡 Run 'flox services start' to start all services" >&2
@@ -228,53 +234,56 @@ tcsh = """
 ##  $ flox activate --start-services  <- Activates & starts all
 ## ------------------------------------------------------------------
 [services]
-# Redis services - using command-line flags instead of config files
+# Redis services - using Unix sockets
 redis-cache.command = """
-  mkdir -p $FLOX_ENV_CACHE/sites && \
+  mkdir -p "$FLOX_ENV_CACHE/sockets" "$FLOX_ENV_CACHE/sites" && \
+  rm -f "$FLOX_ENV_CACHE/sockets/redis-cache.sock" && \
   redis-server \
-    --port 13080 \
-    --bind 127.0.0.1 \
-    --dir $FLOX_ENV_CACHE/sites \
+    --port 0 \
+    --unixsocket "$FLOX_ENV_CACHE/sockets/redis-cache.sock" \
+    --unixsocketperm 770 \
+    --dir "$FLOX_ENV_CACHE/sites" \
     --dbfilename cache.rdb \
     --save "" \
     --appendonly no \
     --maxmemory 500mb \
     --maxmemory-policy allkeys-lru
 """
-redis-cache.is-daemon = true
-redis-cache.shutdown.command = "redis-cli -p 13080 shutdown"
+redis-cache.is-daemon = false
 
 redis-queue.command = """
-  mkdir -p $FLOX_ENV_CACHE/sites && \
+  mkdir -p "$FLOX_ENV_CACHE/sockets" "$FLOX_ENV_CACHE/sites" && \
+  rm -f "$FLOX_ENV_CACHE/sockets/redis-queue.sock" && \
   redis-server \
-    --port 11080 \
-    --bind 127.0.0.1 \
-    --dir $FLOX_ENV_CACHE/sites \
+    --port 0 \
+    --unixsocket "$FLOX_ENV_CACHE/sockets/redis-queue.sock" \
+    --unixsocketperm 770 \
+    --dir "$FLOX_ENV_CACHE/sites" \
     --dbfilename queue.rdb \
     --save 900 1 \
     --save 300 10 \
     --save 60 10000 \
     --appendonly no
 """
-redis-queue.is-daemon = true
-redis-queue.shutdown.command = "redis-cli -p 11080 shutdown"
+redis-queue.is-daemon = false
 
 redis-socketio.command = """
-  mkdir -p $FLOX_ENV_CACHE/sites && \
+  mkdir -p "$FLOX_ENV_CACHE/sockets" "$FLOX_ENV_CACHE/sites" && \
+  rm -f "$FLOX_ENV_CACHE/sockets/redis-socketio.sock" && \
   redis-server \
-    --port 12080 \
-    --bind 127.0.0.1 \
-    --dir $FLOX_ENV_CACHE/sites \
+    --port 0 \
+    --unixsocket "$FLOX_ENV_CACHE/sockets/redis-socketio.sock" \
+    --unixsocketperm 770 \
+    --dir "$FLOX_ENV_CACHE/sites" \
     --dbfilename socketio.rdb \
     --save "" \
     --appendonly no
 """
-redis-socketio.is-daemon = true
-redis-socketio.shutdown.command = "redis-cli -p 12080 shutdown"
+redis-socketio.is-daemon = false
 
-
-# # MariaDB service with inline configuration (kept for reference)
+# MariaDB service with Unix socket (kept for reference)
 # mariadb.command = """
+#   mkdir -p "$FLOX_ENV_CACHE/sockets" "$FLOX_ENV_CACHE/mariadb" && \
 #   mysqld \
 #     --character-set-server=utf8mb4 \
 #     --collation-server=utf8mb4_unicode_ci \
@@ -284,26 +293,29 @@ redis-socketio.shutdown.command = "redis-cli -p 12080 shutdown"
 #     --innodb-log-file-size=64M \
 #     --max-connections=200 \
 #     --innodb-read-only-compressed=OFF \
-#     --datadir=$FLOX_ENV_CACHE/mariadb \
-#     --socket=$FLOX_ENV_CACHE/mariadb/mysql.sock
+#     --skip-networking \
+#     --datadir="$FLOX_ENV_CACHE/mariadb" \
+#     --socket="$FLOX_ENV_CACHE/sockets/mariadb.sock"
 # """
-# mariadb.is-daemon = true
+# mariadb.is-daemon = false
 
-# Frappe web server (gunicorn)
+# Frappe web server (gunicorn) - Unix socket
 web.command = """
   source "$FLOX_ENV_CACHE/env/bin/activate" && \
-  cd $FLOX_ENV_CACHE/sites && \
-  gunicorn -b 127.0.0.1:$FRAPPE_APP_PORT \
-    -w 4 \
+  mkdir -p "$FLOX_ENV_CACHE/sockets" && \
+  rm -f "$FLOX_ENV_CACHE/sockets/frappe.sock" && \
+  cd "$FLOX_ENV_CACHE/sites" && \
+  gunicorn \
+    --bind "unix:$FLOX_ENV_CACHE/sockets/frappe.sock" \
+    --workers 4 \
     --max-requests 5000 \
     --max-requests-jitter 500 \
-    -t 120 \
+    --timeout 120 \
     --graceful-timeout 30 \
     --preload \
     frappe.app:application
 """
 web.is-daemon = false
-# Gunicorn handles SIGTERM gracefully; no custom shutdown needed
 
 # Frappe scheduler
 scheduler.command = """
@@ -312,7 +324,6 @@ scheduler.command = """
   bench schedule
 """
 scheduler.is-daemon = false
-# bench schedule handles SIGTERM gracefully; no custom shutdown needed
 
 # Background workers
 worker-short.command = """
@@ -321,7 +332,6 @@ worker-short.command = """
   bench worker --queue short,default
 """
 worker-short.is-daemon = false
-# RQ workers handle SIGTERM gracefully; no custom shutdown needed
 
 worker-long.command = """
   source "$FLOX_ENV_CACHE/env/bin/activate" && \
@@ -329,21 +339,20 @@ worker-long.command = """
   bench worker --queue long,default,short
 """
 worker-long.is-daemon = false
-# RQ workers handle SIGTERM gracefully; no custom shutdown needed
 
-# Node.js socketio server
+# Node.js socketio server - Unix socket
 socketio.command = """
-  rm -f $FLOX_ENV_CACHE/sites/socketio.sock && \
+  source "$FLOX_ENV_CACHE/env/bin/activate" && \
+  mkdir -p "$FLOX_ENV_CACHE/sockets" && \
+  rm -f "$FLOX_ENV_CACHE/sockets/socketio.sock" && \
   cd "$FLOX_ENV_CACHE" && \
-  node $FLOX_ENV_PROJECT/socketio.js
+  node "$FLOX_ENV_PROJECT/socketio.js"
 """
 socketio.is-daemon = false
-# Node handles SIGTERM gracefully; no custom shutdown needed
 
-# Caddy frontend (if config/Caddyfile exists)
+# Caddy frontend - the only externally accessible service
 caddy.command = "caddy run --config $FLOX_ENV_PROJECT/.flox/env/Caddyfile"
-caddy.is-daemon = true
-caddy.shutdown.command = "caddy stop"
+caddy.is-daemon = false
 
 
 ## Include ----------------------------------------------------------

@@ -1,14 +1,124 @@
-:{$FRAPPE_WEBSERVER_PORT} {
-	root * sites
+# Frappe Development Caddyfile
+# All backend services communicate via Unix sockets
+# Only Caddy exposes an HTTP port
 
-	# Serve static files
-	@static {
-		path /assets/* /files/* /private/files/*
+{
+	auto_https off
+	http_port {$FRAPPE_WEBSERVER_PORT:8888}
+	log {
+		output file {$FLOX_ENV_CACHE}/logs/caddy.error.log
+		level ERROR
 	}
-	handle @static {
+	servers {
+		protocols h1 h2c
+		timeouts {
+			read_body 120s
+			read_header 120s
+			write 120s
+			idle 120s
+		}
+	}
+}
+
+:{$FRAPPE_WEBSERVER_PORT:8888} {
+	root * {$FLOX_ENV_CACHE}/sites
+
+	# Protected files (requires authentication via Frappe)
+	@protected {
+		path /protected/*
+	}
+	handle @protected {
+		uri strip_prefix /protected
+		file_server {
+			root {$FLOX_ENV_CACHE}/sites/{host}
+		}
+	}
+
+	# Private files
+	@private {
+		path /private/files/*
+	}
+	handle @private {
+		uri strip_prefix /private/files
+		file_server {
+			root {$FLOX_ENV_CACHE}/sites/{host}/private/files
+		}
+	}
+
+	# Static assets
+	handle /assets/* {
 		file_server
 	}
 
-	# Proxy to gunicorn
-	reverse_proxy localhost:{$FRAPPE_APP_PORT}
+	# Public files with security headers for certain types
+	handle /files/* {
+		@fileTypes {
+			path *.htm *.html *.svg *.xml
+		}
+		header @fileTypes Content-Disposition "attachment"
+
+		file_server {
+			root {$FLOX_ENV_CACHE}/sites/{host}/public
+		}
+	}
+
+	# Socket.IO - proxy to Unix socket
+	handle /socket.io/* {
+		reverse_proxy unix/{$FLOX_ENV_CACHE}/sockets/socketio.sock {
+			header_up Host {host}
+			header_up Origin {scheme}://{host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Frappe-Site-Name {host}
+
+			# WebSocket support
+			@ws header Connection *Upgrade*
+			header_up @ws Connection {>Connection}
+			header_up @ws Upgrade {>Upgrade}
+
+			transport http {
+				read_buffer 8192
+				write_buffer 8192
+			}
+		}
+	}
+
+	# All other requests go to Frappe (gunicorn) via Unix socket
+	@notStatic {
+		not path /assets/*
+		not path /files/*
+		not path /socket.io/*
+		not path /protected/*
+		not path /private/*
+	}
+
+	reverse_proxy @notStatic unix/{$FLOX_ENV_CACHE}/sockets/frappe.sock {
+		header_up Host {host}
+		header_up X-Frappe-Site-Name {host}
+		header_up X-Use-X-Accel-Redirect True
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+
+		transport http {
+			read_timeout 120s
+			write_timeout 120s
+		}
+	}
+
+	encode gzip
+
+	# Security headers
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		X-XSS-Protection "1; mode=block"
+		Referrer-Policy "same-origin, strict-origin-when-cross-origin"
+	}
+
+	log {
+		output file {$FLOX_ENV_CACHE}/logs/caddy.access.log
+		format json
+	}
 }
