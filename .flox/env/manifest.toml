@@ -56,11 +56,15 @@ just.pkg-path = "just"
 ## -------------------------------------------------------------------
 [vars]
 # Frappe environment variables
+BENCH_SERVICE_MANAGER = "flox"
+BENCH_SERVICE_MANAGER_COMMAND = "services start"
+NO_SERVICE_RESTART = "1"
 FRAPPE_ENV_TYPE = "development"
 DEV_SERVER = "1"
 FRAPPE_STREAM_LOGGING = "1"
 FRAPPE_TUNE_GC = "1"
 LIVE_RELOAD = "1"
+# SHELL = "/usr/bin/env bash"
 
 # Database configuration (kept for reference)
 # FRAPPE_DB_HOST = "127.0.0.1"
@@ -81,6 +85,7 @@ FRAPPE_REDIS_SOCKETIO = "redis://127.0.0.1:12080"
 FRAPPE_BENCH_ROOT = "$FLOX_ENV_CACHE"
 SITES_PATH = "$FLOX_ENV_CACHE/sites"
 FRAPPE_SOCKETIO_PORT = "9080"
+FRAPPE_WEBSERVER_PORT = "8080"
 
 # Enable uv for faster Python package installation
 BENCH_USE_UV = "1"
@@ -135,6 +140,12 @@ on-activate = """
     
     # Install bench CLI using uv
     uv pip install frappe-bench --quiet --python "$PYTHON_DIR/bin/python" 2>/dev/null || true
+
+    # Pre-install common dependencies for Frappe apps
+    bench setup requirements
+
+    # build assets (JS/CSS) for Frappe
+    bench build
   )
   
   # Create site-specific directories if sites exist
@@ -306,8 +317,9 @@ redis-socketio.shutdown.command = "redis-cli -p 12080 shutdown"
 
 # Frappe web server (gunicorn)
 web.command = """
+  source "$FLOX_ENV_CACHE/env/bin/activate" && \
   cd $FLOX_ENV_CACHE/sites && \
-  gunicorn -b 127.0.0.1:8000 \
+  gunicorn -b 127.0.0.1:$FRAPPE_WEBSERVER_PORT \
     -w 4 \
     --max-requests 5000 \
     --max-requests-jitter 500 \
@@ -320,22 +332,35 @@ web.is-daemon = true
 web.shutdown.command = "pkill -f 'gunicorn.*frappe.app:application'"
 
 # Frappe scheduler
-scheduler.command = "bench schedule"
+scheduler.command = """
+  source "$FLOX_ENV_CACHE/env/bin/activate" && \
+  cd "$FLOX_ENV_CACHE" && \
+  bench schedule
+"""
 scheduler.is-daemon = true
 scheduler.shutdown.command = "pkill -f 'bench schedule'"
 
 # Background workers
-worker-short.command = "bench worker --queue short,default"
+worker-short.command = """
+  source "$FLOX_ENV_CACHE/env/bin/activate" && \
+  cd "$FLOX_ENV_CACHE" && \
+  bench worker --queue short,default
+"""
 worker-short.is-daemon = true
 worker-short.shutdown.command = "pkill -f 'bench worker.*short,default'"
 
-worker-long.command = "bench worker --queue long,default,short"
+worker-long.command = """
+  source "$FLOX_ENV_CACHE/env/bin/activate" && \
+  cd "$FLOX_ENV_CACHE" && \
+  bench worker --queue long,default,short
+"""
 worker-long.is-daemon = true
 worker-long.shutdown.command = "pkill -f 'bench worker.*long,default,short'"
 
 # Node.js socketio server
 socketio.command = """
   rm -f $FLOX_ENV_CACHE/sites/socketio.sock && \
+  cd "$FLOX_ENV_CACHE" && \
   node $FLOX_ENV_PROJECT/socketio.js
 """
 socketio.is-daemon = true
