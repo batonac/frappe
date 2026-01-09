@@ -176,12 +176,9 @@ on-activate = """
 ## ... sourced by _your shell_ when you run 'flox activate'.
 ## -------------------------------------------------------------------
 [profile]
-bash = """
-  # Activate Python virtual environment
-  source "$PYTHON_DIR/bin/activate"
-  
-  # Helpful aliases
-  alias frappe-shell='python -c "import frappe; frappe.init(site=\"<site-name>\"); frappe.connect()"'
+common = """
+  # Helpful aliases (POSIX-compatible)
+  alias frappe-shell='python -c \"import frappe; frappe.init(site=\\\"<site-name>\\\"); frappe.connect()\"'
   alias bench-new-site='bench new-site --db-type sqlite --admin-password admin'
   
   echo ""
@@ -204,46 +201,17 @@ bash = """
   echo "Note: Using SQLite for local development."
   echo "      For production, use MariaDB or PostgreSQL."
   echo ""
+"""
+bash = """
+  source "$PYTHON_DIR/bin/activate"
 """
 zsh = """
-  # Activate Python virtual environment
   source "$PYTHON_DIR/bin/activate"
-  
-  # Helpful aliases
-  alias frappe-shell='python -c "import frappe; frappe.init(site=\"<site-name>\"); frappe.connect()"'
-  alias bench-new-site='bench new-site --db-type sqlite --admin-password admin'
-  
-  echo ""
-  echo "╔════════════════════════════════════════════════════════════╗"
-  echo "║            Frappe Development Environment                  ║"
-  echo "║                  (SQLite Edition)                          ║"
-  echo "╠════════════════════════════════════════════════════════════╣"
-  echo "║  Start all services:                                       ║"
-  echo "║    flox services start                                     ║"
-  echo "║                                                            ║"
-  echo "║  Create a new site:                                        ║"
-  echo "║    bench new-site frappe-dev.localhost --db-type sqlite    ║"
-  echo "║                                                            ║"
-  echo "║  Common commands (run from $PWD):                          ║"
-  echo "║    bench --site <site> migrate                             ║"
-  echo "║    bench --site <site> console                             ║"
-  echo "║    bench --site <site> clear-cache                         ║"
-  echo "╚════════════════════════════════════════════════════════════╝"
-  echo ""
-  echo "Note: Using SQLite for local development."
-  echo "      For production, use MariaDB or PostgreSQL."
-  echo ""
 """
 fish = """
-  # Activate Python virtual environment
   source "$PYTHON_DIR/bin/activate.fish"
-  
-  # Helpful aliases
-  alias frappe-shell 'python -c "import frappe; frappe.init(site=\"<site-name>\"); frappe.connect()"'
-  alias bench-new-site 'bench new-site --db-type sqlite --admin-password admin'
 """
 tcsh = """
-  # Activate Python virtual environment
   source "$PYTHON_DIR/bin/activate.csh"
 """
 
