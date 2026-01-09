@@ -79,9 +79,9 @@
       "FRAPPE_DB_NAME": "frappe",
       "FRAPPE_DB_TYPE": "sqlite",
       "FRAPPE_ENV_TYPE": "development",
-      "FRAPPE_REDIS_CACHE": "unix://$FLOX_ENV_CACHE/sockets/redis-cache.sock",
-      "FRAPPE_REDIS_QUEUE": "unix://$FLOX_ENV_CACHE/sockets/redis-queue.sock",
-      "FRAPPE_REDIS_SOCKETIO": "unix://$FLOX_ENV_CACHE/sockets/redis-socketio.sock",
+      "FRAPPE_REDIS_CACHE": "redis://127.0.0.1:13080",
+      "FRAPPE_REDIS_QUEUE": "redis://127.0.0.1:11080",
+      "FRAPPE_REDIS_SOCKETIO": "redis://127.0.0.1:12080",
       "FRAPPE_SOCKETIO_UDS": "$FLOX_ENV_CACHE/sockets/socketio.sock",
       "FRAPPE_SOCKETS_DIR": "$FLOX_ENV_CACHE/sockets",
       "FRAPPE_STREAM_LOGGING": "1",
@@ -117,15 +117,15 @@
         "is-daemon": false
       },
       "redis-cache": {
-        "command": "  mkdir -p \"$FLOX_ENV_CACHE/sockets\" \"$FLOX_ENV_CACHE/sites\" && rm -f \"$FLOX_ENV_CACHE/sockets/redis-cache.sock\" && redis-server --port 0 --unixsocket \"$FLOX_ENV_CACHE/sockets/redis-cache.sock\" --unixsocketperm 770 --dir \"$FLOX_ENV_CACHE/sites\" --dbfilename cache.rdb --save \"\" --appendonly no --maxmemory 500mb --maxmemory-policy allkeys-lru\n",
+        "command": "  mkdir -p \"$FLOX_ENV_CACHE/sites\" && redis-server --port 13080 --bind 127.0.0.1 --dir \"$FLOX_ENV_CACHE/sites\" --dbfilename cache.rdb --save \"\" --appendonly no --maxmemory 500mb --maxmemory-policy allkeys-lru\n",
         "is-daemon": false
       },
       "redis-queue": {
-        "command": "  mkdir -p \"$FLOX_ENV_CACHE/sockets\" \"$FLOX_ENV_CACHE/sites\" && rm -f \"$FLOX_ENV_CACHE/sockets/redis-queue.sock\" && redis-server --port 0 --unixsocket \"$FLOX_ENV_CACHE/sockets/redis-queue.sock\" --unixsocketperm 770 --dir \"$FLOX_ENV_CACHE/sites\" --dbfilename queue.rdb --save 900 1 --save 300 10 --save 60 10000 --appendonly no\n",
+        "command": "  mkdir -p \"$FLOX_ENV_CACHE/sites\" && redis-server --port 11080 --bind 127.0.0.1 --dir \"$FLOX_ENV_CACHE/sites\" --dbfilename queue.rdb --save 900 1 --save 300 10 --save 60 10000 --appendonly no\n",
         "is-daemon": false
       },
       "redis-socketio": {
-        "command": "  mkdir -p \"$FLOX_ENV_CACHE/sockets\" \"$FLOX_ENV_CACHE/sites\" && rm -f \"$FLOX_ENV_CACHE/sockets/redis-socketio.sock\" && redis-server --port 0 --unixsocket \"$FLOX_ENV_CACHE/sockets/redis-socketio.sock\" --unixsocketperm 770 --dir \"$FLOX_ENV_CACHE/sites\" --dbfilename socketio.rdb --save \"\" --appendonly no\n",
+        "command": "  mkdir -p \"$FLOX_ENV_CACHE/sites\" && redis-server --port 12080 --bind 127.0.0.1 --dir \"$FLOX_ENV_CACHE/sites\" --dbfilename socketio.rdb --save \"\" --appendonly no\n",
         "is-daemon": false
       },
       "scheduler": {
@@ -137,7 +137,7 @@
         "is-daemon": false
       },
       "web": {
-        "command": "  source \"$FLOX_ENV_CACHE/env/bin/activate\" && mkdir -p \"$FLOX_ENV_CACHE/sockets\" && rm -f \"$FLOX_ENV_CACHE/sockets/frappe.sock\" && cd \"$FLOX_ENV_CACHE/sites\" && gunicorn --bind \"unix:$FLOX_ENV_CACHE/sockets/frappe.sock\" --workers 4 --max-requests 5000 --max-requests-jitter 500 --timeout 120 --graceful-timeout 30 --preload frappe.app:application\n",
+        "command": "  source \"$FLOX_ENV_CACHE/env/bin/activate\" && mkdir -p \"$FLOX_ENV_CACHE/sockets\" \"$FLOX_ENV_CACHE/logs\" && rm -f \"$FLOX_ENV_CACHE/sockets/frappe.sock\" && cd \"$FLOX_ENV_CACHE/sites\" && gunicorn --bind \"unix:$FLOX_ENV_CACHE/sockets/frappe.sock\" --workers 4 --max-requests 5000 --max-requests-jitter 500 --timeout 120 --graceful-timeout 30 --preload --error-logfile \"$FLOX_ENV_CACHE/logs/web.error.log\" --access-logfile \"$FLOX_ENV_CACHE/logs/web.log\" --capture-output frappe.app:application\n",
         "is-daemon": false
       },
       "worker-long": {

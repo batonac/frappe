@@ -76,10 +76,10 @@ FRAPPE_DB_NAME = "frappe"
 # FRAPPE_DB_ROOT_PASSWORD = "frappe"
 # FRAPPE_DB_SOCKET = "$FLOX_ENV_CACHE/sockets/mariadb.sock"
 
-# Redis configuration - using Unix sockets
-FRAPPE_REDIS_CACHE = "unix://$FLOX_ENV_CACHE/sockets/redis-cache.sock"
-FRAPPE_REDIS_QUEUE = "unix://$FLOX_ENV_CACHE/sockets/redis-queue.sock"
-FRAPPE_REDIS_SOCKETIO = "unix://$FLOX_ENV_CACHE/sockets/redis-socketio.sock"
+# Redis configuration - using TCP ports (Unix sockets have a bug in Frappe's redis wrapper)
+FRAPPE_REDIS_CACHE = "redis://127.0.0.1:13080"
+FRAPPE_REDIS_QUEUE = "redis://127.0.0.1:11080"
+FRAPPE_REDIS_SOCKETIO = "redis://127.0.0.1:12080"
 
 # Frappe paths - FLOX_ENV_CACHE is the bench root
 FRAPPE_BENCH_ROOT = "$FLOX_ENV_CACHE"
@@ -234,14 +234,12 @@ tcsh = """
 ##  $ flox activate --start-services  <- Activates & starts all
 ## ------------------------------------------------------------------
 [services]
-# Redis services - using Unix sockets
+# Redis services - using TCP ports (Unix sockets have a bug in Frappe's redis wrapper)
 redis-cache.command = """
-  mkdir -p "$FLOX_ENV_CACHE/sockets" "$FLOX_ENV_CACHE/sites" && \
-  rm -f "$FLOX_ENV_CACHE/sockets/redis-cache.sock" && \
+  mkdir -p "$FLOX_ENV_CACHE/sites" && \
   redis-server \
-    --port 0 \
-    --unixsocket "$FLOX_ENV_CACHE/sockets/redis-cache.sock" \
-    --unixsocketperm 770 \
+    --port 13080 \
+    --bind 127.0.0.1 \
     --dir "$FLOX_ENV_CACHE/sites" \
     --dbfilename cache.rdb \
     --save "" \
@@ -252,12 +250,10 @@ redis-cache.command = """
 redis-cache.is-daemon = false
 
 redis-queue.command = """
-  mkdir -p "$FLOX_ENV_CACHE/sockets" "$FLOX_ENV_CACHE/sites" && \
-  rm -f "$FLOX_ENV_CACHE/sockets/redis-queue.sock" && \
+  mkdir -p "$FLOX_ENV_CACHE/sites" && \
   redis-server \
-    --port 0 \
-    --unixsocket "$FLOX_ENV_CACHE/sockets/redis-queue.sock" \
-    --unixsocketperm 770 \
+    --port 11080 \
+    --bind 127.0.0.1 \
     --dir "$FLOX_ENV_CACHE/sites" \
     --dbfilename queue.rdb \
     --save 900 1 \
@@ -268,12 +264,10 @@ redis-queue.command = """
 redis-queue.is-daemon = false
 
 redis-socketio.command = """
-  mkdir -p "$FLOX_ENV_CACHE/sockets" "$FLOX_ENV_CACHE/sites" && \
-  rm -f "$FLOX_ENV_CACHE/sockets/redis-socketio.sock" && \
+  mkdir -p "$FLOX_ENV_CACHE/sites" && \
   redis-server \
-    --port 0 \
-    --unixsocket "$FLOX_ENV_CACHE/sockets/redis-socketio.sock" \
-    --unixsocketperm 770 \
+    --port 12080 \
+    --bind 127.0.0.1 \
     --dir "$FLOX_ENV_CACHE/sites" \
     --dbfilename socketio.rdb \
     --save "" \
@@ -302,7 +296,7 @@ redis-socketio.is-daemon = false
 # Frappe web server (gunicorn) - Unix socket
 web.command = """
   source "$FLOX_ENV_CACHE/env/bin/activate" && \
-  mkdir -p "$FLOX_ENV_CACHE/sockets" && \
+  mkdir -p "$FLOX_ENV_CACHE/sockets" "$FLOX_ENV_CACHE/logs" && \
   rm -f "$FLOX_ENV_CACHE/sockets/frappe.sock" && \
   cd "$FLOX_ENV_CACHE/sites" && \
   gunicorn \
@@ -313,6 +307,9 @@ web.command = """
     --timeout 120 \
     --graceful-timeout 30 \
     --preload \
+    --error-logfile "$FLOX_ENV_CACHE/logs/web.error.log" \
+    --access-logfile "$FLOX_ENV_CACHE/logs/web.log" \
+    --capture-output \
     frappe.app:application
 """
 web.is-daemon = false
