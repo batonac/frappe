@@ -1,4 +1,4 @@
-:8080 {
+:{$FRAPPE_WEBSERVER_PORT} {
 	root * sites
 
 	# Serve static files
@@ -10,5 +10,5 @@
 	}
 
 	# Proxy to gunicorn
-	reverse_proxy localhost:8000
+	reverse_proxy localhost:{$FRAPPE_APP_PORT}
 }

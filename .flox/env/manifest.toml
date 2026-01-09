@@ -13,7 +13,7 @@ python3.pkg-path = "python314"
 # python3.version = "3.14.0"
 # python3.systems = ["x86_64-linux", "aarch64-darwin"]
 
-uv.pkg-path = "uv"           # Modern Python package installer
+uv.pkg-path = "uv" # Modern Python package installer
 
 # Web servers
 caddy.pkg-path = "caddy"
@@ -85,7 +85,8 @@ FRAPPE_REDIS_SOCKETIO = "redis://127.0.0.1:12080"
 FRAPPE_BENCH_ROOT = "$FLOX_ENV_CACHE"
 SITES_PATH = "$FLOX_ENV_CACHE/sites"
 FRAPPE_SOCKETIO_PORT = "9080"
-FRAPPE_WEBSERVER_PORT = "8080"
+FRAPPE_APP_PORT = "8000"
+FRAPPE_WEBSERVER_PORT = "8888"
 
 # Enable uv for faster Python package installation
 BENCH_USE_UV = "1"
@@ -102,10 +103,10 @@ on-activate = """
   # Create bench directory structure in FLOX_ENV_CACHE (the bench root)
   mkdir -p "$FLOX_ENV_CACHE"/{apps,sites/assets,config,logs,config/pids}
   
-  # Symlink frappe source ($PWD) into FLOX_ENV_CACHE/apps/frappe
+  # Symlink frappe source ($FLOX_ENV_PROJECT) into FLOX_ENV_CACHE/apps/frappe
   mkdir -p "$FLOX_ENV_CACHE/apps"
   if [ ! -e "$FLOX_ENV_CACHE/apps/frappe" ]; then
-    ln -sf "$PWD" "$FLOX_ENV_CACHE/apps/frappe"
+    ln -sf "$FLOX_ENV_PROJECT" "$FLOX_ENV_CACHE/apps/frappe"
   fi
 
   # Provision apps.txt in the sites directory
@@ -115,37 +116,41 @@ on-activate = """
   fi
   
   # Setup Python virtual environment
+  # Export PYTHON_DIR so it's available to profile scripts and subprocesses
   export PYTHON_DIR="$FLOX_ENV_CACHE/env"
   if [ ! -d "$PYTHON_DIR" ]; then
-    echo "Creating python virtual environment in $PYTHON_DIR"
+    echo "Creating python virtual environment in $PYTHON_DIR" >&2
     python -m venv "$PYTHON_DIR"
   fi
   
-  # Create convenience symlinks in $PWD for bench directories
+  # Add venv bin to PATH directly (needed for direnv in-place activation)
+  export PATH="$PYTHON_DIR/bin:$PATH"
+  export VIRTUAL_ENV="$PYTHON_DIR"
+  
+  # Create convenience symlinks in $FLOX_ENV_PROJECT for bench directories
   # These allow running bench commands from the frappe development root
   for dir in apps env sites config logs; do
-    if [ ! -e "$PWD/$dir" ] || [ ! -L "$PWD/$dir" ]; then
-      ln -sf "$FLOX_ENV_CACHE/$dir" "$PWD/$dir"
+    if [ ! -L "$FLOX_ENV_PROJECT/$dir" ]; then
+      ln -sfn "$FLOX_ENV_CACHE/$dir" "$FLOX_ENV_PROJECT/$dir"
     fi
   done
 
   # Install frappe and dependencies in a subshell
   (
-    source "$PYTHON_DIR/bin/activate"
     # Install/upgrade pip, setuptools, wheel using uv
     uv pip install --quiet --upgrade pip setuptools wheel --python "$PYTHON_DIR/bin/python"
     
-    # Install frappe in editable mode from $PWD using uv
-    uv pip install -e "$PWD" --quiet --python "$PYTHON_DIR/bin/python"
+    # Install frappe in editable mode from $FLOX_ENV_PROJECT using uv
+    uv pip install -e "$FLOX_ENV_PROJECT" --quiet --python "$PYTHON_DIR/bin/python"
     
     # Install bench CLI using uv
     uv pip install frappe-bench --quiet --python "$PYTHON_DIR/bin/python" 2>/dev/null || true
 
     # Pre-install common dependencies for Frappe apps
-    bench setup requirements
+    "$PYTHON_DIR/bin/bench" setup requirements
 
     # build assets (JS/CSS) for Frappe
-    bench build
+    "$PYTHON_DIR/bin/bench" build
   )
   
   # Create site-specific directories if sites exist
@@ -160,15 +165,6 @@ on-activate = """
       mkdir -p "$site/public/files"
     fi
   done
-
-  echo "✅ Frappe bench environment ready!"
-  echo "   Bench root: $FLOX_ENV_CACHE"
-  echo "   Frappe source: $PWD"
-  echo "   Working directory: $PWD (bench commands work here!)"
-  echo "   Using uv for Python package management"
-  echo ""
-  echo "💡 Site data is ephemeral and won't be committed to git"
-  echo "💡 Run 'flox services start' to start all services"
 """
 
 
@@ -180,38 +176,48 @@ common = """
   # Helpful aliases (POSIX-compatible)
   alias frappe-shell='python -c \"import frappe; frappe.init(site=\\\"<site-name>\\\"); frappe.connect()\"'
   alias bench-new-site='bench new-site --db-type sqlite --admin-password admin'
-  
-  echo ""
-  echo "╔════════════════════════════════════════════════════════════╗"
-  echo "║            Frappe Development Environment                  ║"
-  echo "║                  (SQLite Edition)                          ║"
-  echo "╠════════════════════════════════════════════════════════════╣"
-  echo "║  Start all services:                                       ║"
-  echo "║    flox services start                                     ║"
-  echo "║                                                            ║"
-  echo "║  Create a new site:                                        ║"
-  echo "║    bench new-site frappe-dev.localhost --db-type sqlite    ║"
-  echo "║                                                            ║"
-  echo "║  Common commands (run from $PWD):                          ║"
-  echo "║    bench --site <site> migrate                             ║"
-  echo "║    bench --site <site> console                             ║"
-  echo "║    bench --site <site> clear-cache                         ║"
-  echo "╚════════════════════════════════════════════════════════════╝"
-  echo ""
-  echo "Note: Using SQLite for local development."
-  echo "      For production, use MariaDB or PostgreSQL."
-  echo ""
+
+  echo "" >&2
+  echo "╔════════════════════════════════════════════════════════════╗" >&2
+  echo "║            Frappe Development Environment                  ║" >&2
+  echo "║                  (SQLite Edition)                          ║" >&2
+  echo "╠════════════════════════════════════════════════════════════╣" >&2
+  echo "║  Start all services:                                       ║" >&2
+  echo "║    flox services start                                     ║" >&2
+  echo "║                                                            ║" >&2
+  echo "║  Create a new site:                                        ║" >&2
+  echo "║    bench new-site frappe-dev.localhost --db-type sqlite    ║" >&2
+  echo "║                                                            ║" >&2
+  echo "║  Common commands:                                          ║" >&2
+  echo "║    bench --site <site> migrate                             ║" >&2
+  echo "║    bench --site <site> console                             ║" >&2
+  echo "║    bench --site <site> clear-cache                         ║" >&2
+  echo "╚════════════════════════════════════════════════════════════╝" >&2
+  echo "" >&2
+  echo "✅ Frappe bench environment ready!" >&2
+  echo "   Bench root: $FLOX_ENV_CACHE" >&2
+  echo "   Using uv for Python package management" >&2
+  echo "" >&2
+  echo "Note: Using SQLite for local development." >&2
+  echo "      For production, use MariaDB or PostgreSQL." >&2
+  echo "" >&2
+  echo "💡 Site data is ephemeral and won't be committed to git" >&2
+  echo "💡 Run 'flox services start' to start all services" >&2
 """
 bash = """
+  # Activate venv (for interactive shells)
   source "$PYTHON_DIR/bin/activate"
 """
 zsh = """
+  # Activate venv (for interactive shells)
   source "$PYTHON_DIR/bin/activate"
 """
 fish = """
+  # Activate venv (for interactive shells)
   source "$PYTHON_DIR/bin/activate.fish"
 """
 tcsh = """
+  # Activate venv (for interactive shells)
   source "$PYTHON_DIR/bin/activate.csh"
 """
 
@@ -287,7 +293,7 @@ redis-socketio.shutdown.command = "redis-cli -p 12080 shutdown"
 web.command = """
   source "$FLOX_ENV_CACHE/env/bin/activate" && \
   cd $FLOX_ENV_CACHE/sites && \
-  gunicorn -b 127.0.0.1:$FRAPPE_WEBSERVER_PORT \
+  gunicorn -b 127.0.0.1:$FRAPPE_APP_PORT \
     -w 4 \
     --max-requests 5000 \
     --max-requests-jitter 500 \
@@ -296,8 +302,8 @@ web.command = """
     --preload \
     frappe.app:application
 """
-web.is-daemon = true
-web.shutdown.command = "pkill -f 'gunicorn.*frappe.app:application'"
+web.is-daemon = false
+# Gunicorn handles SIGTERM gracefully; no custom shutdown needed
 
 # Frappe scheduler
 scheduler.command = """
@@ -305,8 +311,8 @@ scheduler.command = """
   cd "$FLOX_ENV_CACHE" && \
   bench schedule
 """
-scheduler.is-daemon = true
-scheduler.shutdown.command = "pkill -f 'bench schedule'"
+scheduler.is-daemon = false
+# bench schedule handles SIGTERM gracefully; no custom shutdown needed
 
 # Background workers
 worker-short.command = """
@@ -314,16 +320,16 @@ worker-short.command = """
   cd "$FLOX_ENV_CACHE" && \
   bench worker --queue short,default
 """
-worker-short.is-daemon = true
-worker-short.shutdown.command = "pkill -f 'bench worker.*short,default'"
+worker-short.is-daemon = false
+# RQ workers handle SIGTERM gracefully; no custom shutdown needed
 
 worker-long.command = """
   source "$FLOX_ENV_CACHE/env/bin/activate" && \
   cd "$FLOX_ENV_CACHE" && \
   bench worker --queue long,default,short
 """
-worker-long.is-daemon = true
-worker-long.shutdown.command = "pkill -f 'bench worker.*long,default,short'"
+worker-long.is-daemon = false
+# RQ workers handle SIGTERM gracefully; no custom shutdown needed
 
 # Node.js socketio server
 socketio.command = """
@@ -331,8 +337,8 @@ socketio.command = """
   cd "$FLOX_ENV_CACHE" && \
   node $FLOX_ENV_PROJECT/socketio.js
 """
-socketio.is-daemon = true
-socketio.shutdown.command = "pkill -f 'node.*socketio.js'"
+socketio.is-daemon = false
+# Node handles SIGTERM gracefully; no custom shutdown needed
 
 # Caddy frontend (if config/Caddyfile exists)
 caddy.command = "caddy run --config $FLOX_ENV_PROJECT/.flox/env/Caddyfile"
