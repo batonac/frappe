@@ -218,7 +218,7 @@ def get_chart_config(chart, filters, timespan, timegrain, from_date, to_date):
 			else get_period(r[0], timegrain)
 			for r in result
 		],
-		"datasets": [{"name": chart.name, "values": [r[1] for r in result]}],
+		"datasets": [{"name": _(chart.name), "values": [r[1] for r in result]}],
 	}
 
 
@@ -274,7 +274,7 @@ def get_group_by_chart_config(chart, filters) -> dict | None:
 		],
 		filters=filters,
 		parent_doctype=chart.parent_document_type,
-		group_by=group_by_field,
+		group_by=group_by_field if "." in group_by_field else f"`tab{doctype}`.`{group_by_field}`",
 		order_by="count desc",
 		ignore_ifnull=True,
 	)
@@ -292,7 +292,7 @@ def get_group_by_chart_config(chart, filters) -> dict | None:
 	if data:
 		return {
 			"labels": [item.get("name", "Not Specified") for item in data],
-			"datasets": [{"name": chart.name, "values": [item["count"] for item in data]}],
+			"datasets": [{"name": _(chart.name), "values": [item["count"] for item in data]}],
 		}
 	return None
 

@@ -24,7 +24,9 @@ class CustomField(Document):
 
 		allow_in_quick_entry: DF.Check
 		allow_on_submit: DF.Check
+		alignment: DF.Literal["", "Left", "Center", "Right"]
 		bold: DF.Check
+		button_color: DF.Literal["", "Default", "Primary", "Info", "Success", "Warning", "Danger"]
 		collapsible: DF.Check
 		collapsible_depends_on: DF.Code | None
 		columns: DF.Int

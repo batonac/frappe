@@ -768,6 +768,7 @@ docfield_properties = {
 	"permlevel": "Int",
 	"width": "Data",
 	"print_width": "Data",
+	"alignment": "Select",
 	"non_negative": "Check",
 	"reqd": "Check",
 	"unique": "Check",
@@ -806,6 +807,8 @@ docfield_properties = {
 	"is_virtual": "Check",
 	"link_filters": "JSON",
 	"placeholder": "Data",
+	"button_color": "Select",
+	"mask": "Check",
 }
 
 doctype_link_properties = {
