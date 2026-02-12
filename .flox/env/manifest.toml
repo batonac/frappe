@@ -91,8 +91,8 @@ SITES_PATH = "$FLOX_ENV_CACHE/sites"
 
 # Unix socket paths for services
 FRAPPE_SOCKETS_DIR = "$FLOX_ENV_CACHE/sockets"
-FRAPPE_WEB_SOCKET = "$FRAPPE_SOCKETS_DIR/frappe.sock"
-FRAPPE_SOCKETIO_UDS = "$FRAPPE_SOCKETS_DIR/socketio.sock"
+FRAPPE_WEB_SOCKET = "$FLOX_ENV_CACHE/sockets/frappe.sock"
+FRAPPE_SOCKETIO_UDS = "$FLOX_ENV_CACHE/sockets/socketio.sock"
 
 # Caddy is the only service with an external port
 FRAPPE_WEBSERVER_PORT = "8888"
