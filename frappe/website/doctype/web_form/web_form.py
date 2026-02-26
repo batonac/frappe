@@ -3,6 +3,7 @@
 
 import json
 import os
+from typing import Any
 
 import frappe
 from frappe import _, scrub
@@ -70,6 +71,7 @@ class WebForm(WebsiteGenerator):
 		web_form_fields: DF.Table[WebFormField]
 		website_sidebar: DF.Link | None
 	# end: auto-generated types
+
 	website = frappe._dict(no_cache=1)
 
 	def validate(self):
@@ -274,53 +276,69 @@ def get_context(context):
 
 	def load_translations(self, context):
 		messages = [
-			"Sr",
-			"Attach",
-			"Next",
-			"Previous",
-			"Discard?",
-			"Cancel",
-			"Discard:Button in web form",
-			"Edit:Button in web form",
-			"See previous responses::Button in web form",
-			"Edit your response::Button in web form",
+			"{0} if you are not redirected within {1} seconds",
+			"← Back to upload files",
+			"Are you sure you want to delete this record?",
 			"Are you sure you want to discard the changes?",
-			"Mandatory fields required::Error message in web form",
-			"Invalid values for fields::Error message in web form",
-			"Error:Title of error message in web form",
-			"Page {0} of {1}",
-			"Couldn't save, please check the data you have entered",
-			"Validation Error",
-			"No {0} found",
-			"Create a new {0}",
+			"Attach a web link",
+			"Attach",
+			"Attachments",
 			"Camera",
-			"Delete",
+			"Cancel",
+			"Capture",
+			"Click here",
+			"Comments",
+			("Confirm", "Title of confirmation dialog"),
+			"Couldn't save, please check the data you have entered",
+			"Create a new {0}",
+			("Delete", "Button in web form"),
+			"Deleted!",
+			("Discard", "Button in web form"),
+			"Discard?",
 			"Drag and drop files here or upload from",
-			"Following fields have missing values::Error message in web form",
+			"Drop files here",
+			("Edit your response", "Button in web form"),
+			("Edit", "Button in web form"),
+			("Error", "Title of error message in web form"),
+			"Following fields have missing values:",
+			("Invalid values for fields", "Error message in web form"),
+			"Link",
 			"Link",
 			"Load More",
 			"Message",
-			"Missing Values Required:Error message in web form",
+			"Missing Values Required",
 			"My Device",
+			"New",
+			"Next",
+			"No {0} found",
 			"No comments yet.",
+			"No Images",
 			"No more items to display",
+			("No", "Dismiss confirmation dialog"),
+			"Not Saved",
+			"Optimize",
+			"Page {0} of {1}",
+			"Preview",
+			"Previous",
+			"Private",
+			"Public",
+			("See previous responses", "Button in web form"),
 			"Set all private",
 			"Set all public",
+			"Sr",
 			"Start a new discussion",
-			"Upload",
-			"Link",
-			"Public",
-			"Private",
-			"Optimize",
-			"Drop files here",
+			("Submit another response", "Button in web form"),
+			("Submit", "Button in web form"),
+			"Submitted",
 			"Take Photo",
-			"No Images",
+			"Thank you for spending your valuable time to fill this form",
 			"Total Images",
-			"Preview",
-			"Submit",
-			"Capture",
-			"Attach a web link",
-			"← Back to upload files",
+			"Updated",
+			"Upload",
+			"Validation Error",
+			("View your response", "Button in web form"),
+			("Yes", "Approve confirmation dialog"),
+			"Your form has been successfully updated",
 			self.title,
 			self.introduction_text,
 			self.success_title,
@@ -338,57 +356,68 @@ def get_context(context):
 
 		# When at least one field in self.web_form_fields has fieldtype "Table" then add "No data" to messages
 		if any(field.fieldtype == "Table" for field in self.web_form_fields):
-			messages.append("Move")
-			messages.append("Insert Above")
-			messages.append("Insert Below")
-			messages.append("Duplicate")
-			messages.append("Shortcuts")
-			messages.append("Ctrl + Up")
-			messages.append("Ctrl + Down")
-			messages.append("ESC")
-			messages.append("Editing Row")
-			messages.append("Add / Remove Columns")
-			messages.append("Fieldname")
-			messages.append("Column Width")
-			messages.append("Configure Columns")
-			messages.append("Select Fields")
-			messages.append("Select All")
-			messages.append("Update")
-			messages.append("Reset to default")
-			messages.append("No Data")
-			messages.append("Delete")
-			messages.append("Delete All")
-			messages.append("Add Row")
-			messages.append("Add Multiple")
-			messages.append("Download")
-			messages.append("of")
-			messages.append("Upload")
-			messages.append("Last")
-			messages.append("First")
-			messages.append("No.")
-
+			messages.extend(
+				(
+					"Move",
+					"Insert Above",
+					"Insert Below",
+					"Duplicate",
+					"Shortcuts",
+					"Ctrl + Up",
+					"Ctrl + Down",
+					"ESC",
+					"Editing Row",
+					"Add / Remove Columns",
+					"Fieldname",
+					"Column Width",
+					"Configure Columns",
+					"Select Fields",
+					"Select All",
+					"Update",
+					"Reset to default",
+					"No Data",
+					"Delete",
+					"Delete All",
+					"Add row",
+					"Add Multiple",
+					"Download",
+					"of",
+					"Upload",
+					"Last",
+					"First",
+					"No.",
+				)
+			)
 		# Phone Picker
 		if any(field.fieldtype == "Phone" for field in self.web_form_fields):
 			messages.append("Search for countries...")
 
 		# Dates
 		if any(field.fieldtype == "Date" for field in self.web_form_fields):
-			messages.append("Now")
-			messages.append("Today")
-			messages.append("Date {0} must be in format: {1}")
-			messages.append("{0} to {1}")
-
+			messages.extend(("Now", "Today", "Date {0} must be in format: {1}", "{0} to {1}"))
 		# Time
 		if any(field.fieldtype == "Time" for field in self.web_form_fields):
 			messages.append("Now")
 
 		messages.extend(col.get("label") if col else "" for col in self.list_columns)
 
-		context.translated_messages = frappe.as_json({message: _(message) for message in messages if message})
+		translation_dict = {}
+		for key in messages:
+			if not key:
+				continue
+
+			if isinstance(key, tuple):
+				msg, ctx = key
+				# Use the original tuple as the key for backward compatibility
+				translation_dict[f"{msg}:{ctx}"] = _(msg, context=ctx)
+			else:
+				translation_dict[key] = _(key)
+
+		context.translated_messages = frappe.as_json(translation_dict)
 
 	def load_list_data(self, context):
 		if not self.list_columns:
-			self.list_columns = get_in_list_view_fields(self.doc_type)
+			self.list_columns = get_in_list_view_fields(self.doc_type, self.name)
 			context.web_form_doc.list_columns = self.list_columns
 
 	def load_form_data(self, context):
@@ -425,13 +454,10 @@ def get_context(context):
 		# For Table fields, server-side processing for meta
 		for field in context.web_form_doc.web_form_fields:
 			if field.fieldtype == "Table":
-				field.fields = get_in_list_view_fields(field.options)
+				field.fields = get_in_list_view_fields(field.options, self.name)
 
 			if field.fieldtype == "Link":
-				field.fieldtype = "Autocomplete"
-				field.options = get_link_options(
-					self.name, field.options, field.allow_read_on_all_link_options
-				)
+				process_link_field(field, self.name)
 
 		context.reference_doc = {}
 
@@ -580,6 +606,14 @@ def get_context(context):
 		return permitted_attachments
 
 
+def process_link_field(field, web_form_name):
+	field.fieldtype = "Autocomplete"
+	field.options = get_link_options(
+		web_form_name, field.options, getattr(field, "allow_read_on_all_link_options", False)
+	)
+	return field
+
+
 def get_web_form_module(doc):
 	if doc.is_standard:
 		return get_doc_module(doc.module, doc.doctype, doc.name)
@@ -587,7 +621,7 @@ def get_web_form_module(doc):
 
 @frappe.whitelist(allow_guest=True)
 @rate_limit(key="web_form", limit=10, seconds=60)
-def accept(web_form, data):
+def accept(web_form: str, data: str):
 	"""Save the web form"""
 	data = frappe._dict(json.loads(data))
 
@@ -613,6 +647,10 @@ def accept(web_form, data):
 	else:
 		# insert
 		doc = frappe.new_doc(doctype)
+
+	# Set ignore_mandatory flag if allow_incomplete is enabled
+	if web_form.allow_incomplete:
+		doc.flags.ignore_mandatory = True
 
 	# set values
 	for field in web_form.web_form_fields:
@@ -644,7 +682,7 @@ def accept(web_form, data):
 		if web_form.login_required and frappe.session.user == "Guest":
 			frappe.throw(_("You must login to submit this form"))
 
-		ignore_mandatory = True if files else False
+		ignore_mandatory = True if (files or web_form.allow_incomplete) else False
 
 		doc.insert(ignore_permissions=True, ignore_mandatory=ignore_mandatory)
 
@@ -700,7 +738,7 @@ def delete(web_form_name: str, docname: str | int):
 
 
 @frappe.whitelist()
-def delete_multiple(web_form_name: str, docnames):
+def delete_multiple(web_form_name: str, docnames: str):
 	web_form = frappe.get_lazy_doc("Web Form", web_form_name)
 
 	docnames = json.loads(docnames)
@@ -762,20 +800,16 @@ def get_form_data(doctype: str, docname: str | None = None, web_form_name: str |
 	# For Table fields, server-side processing for meta
 	for field in out.web_form.web_form_fields:
 		if field.fieldtype == "Table":
-			field.fields = get_in_list_view_fields(field.options)
+			field.fields = get_in_list_view_fields(field.options, web_form_name)
 			out.update({field.fieldname: field.fields})
 
 		if field.fieldtype == "Link":
-			field.fieldtype = "Autocomplete"
-			field.options = get_link_options(
-				web_form_name, field.options, field.allow_read_on_all_link_options
-			)
+			process_link_field(field, web_form_name)
 
 	return out
 
 
-@frappe.whitelist()
-def get_in_list_view_fields(doctype):
+def get_in_list_view_fields(doctype, web_form_name=None):
 	meta = frappe.get_meta(doctype)
 	fields = []
 
@@ -792,9 +826,31 @@ def get_in_list_view_fields(doctype):
 	def get_field_df(fieldname):
 		if fieldname == "name":
 			return {"label": "Name", "fieldname": "name", "fieldtype": "Data"}
-		return meta.get_field(fieldname).as_dict()
+
+		df = meta.get_field(fieldname).as_dict()
+		if df.get("options") and df.get("fieldtype") == "Link":
+			process_link_field(df, web_form_name)
+		return df
 
 	return [get_field_df(f) for f in fields]
+
+
+def has_link_option(fields, doctype):
+	for f in fields:
+		if f.options == doctype:
+			return True
+		if f.fieldtype == "Table" and f.options:
+			child_doctype = f.options
+			if not isinstance(child_doctype, str) or not child_doctype.strip():
+				continue
+			try:
+				child_table_fields = frappe.get_meta(child_doctype).fields
+			except Exception:
+				continue
+			for child_field in child_table_fields:
+				if getattr(child_field, "options", None) == doctype:
+					return True
+	return False
 
 
 def get_link_options(web_form_name, doctype, allow_read_on_all_link_options=False):
@@ -803,9 +859,10 @@ def get_link_options(web_form_name, doctype, allow_read_on_all_link_options=Fals
 	if web_form.login_required and frappe.session.user == "Guest":
 		frappe.throw(_("You must be logged in to use this form."), frappe.PermissionError)
 
-	if not web_form.published or not any(f for f in web_form.web_form_fields if f.options == doctype):
+	if not web_form.published or not has_link_option(web_form.web_form_fields, doctype):
 		frappe.throw(
-			_("You don't have permission to access the {0} DocType.").format(doctype), frappe.PermissionError
+			_("You don't have permission to access the {0} DocType.").format(doctype),
+			frappe.PermissionError,
 		)
 
 	link_options, filters = [], {}

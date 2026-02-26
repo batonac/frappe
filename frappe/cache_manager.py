@@ -105,7 +105,8 @@ def clear_global_cache():
 
 	clear_doctype_cache()
 	clear_website_cache()
-	frappe.cache.delete_value(global_cache_keys + bench_cache_keys)
+	frappe.cache.delete_value(global_cache_keys)
+	frappe.cache.delete_value(bench_cache_keys, shared=True)
 	frappe.setup_module_map()
 
 
@@ -147,17 +148,26 @@ def _clear_doctype_cache_from_redis(doctype: str | None = None):
 		clear_single(doctype)
 
 		# clear all parent doctypes
-		for dt in frappe.get_all(
-			"DocField", "parent", dict(fieldtype=["in", frappe.model.table_fields], options=doctype)
-		):
-			clear_single(dt.parent)
-
-		# clear all parent doctypes
-		if not frappe.flags.in_install:
+		try:
 			for dt in frappe.get_all(
-				"Custom Field", "dt", dict(fieldtype=["in", frappe.model.table_fields], options=doctype)
+				"DocField",
+				"parent",
+				dict(fieldtype=["in", frappe.model.table_fields], options=doctype),
+				ignore_ddl=True,
 			):
-				clear_single(dt.dt)
+				clear_single(dt.parent)
+
+			# clear all parent doctypes
+			if not frappe.flags.in_install:
+				for dt in frappe.get_all(
+					"Custom Field",
+					"dt",
+					dict(fieldtype=["in", frappe.model.table_fields], options=doctype),
+					ignore_ddl=True,
+				):
+					clear_single(dt.dt)
+		except frappe.DoesNotExistError:
+			pass  # core doctypes getting migrated.
 
 		# clear all notifications
 		delete_notification_count_for(doctype)

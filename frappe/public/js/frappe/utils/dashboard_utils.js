@@ -234,7 +234,6 @@ frappe.dashboard_utils = {
 
 		return filters;
 	},
-
 	get_dashboard_link_field() {
 		let field = {
 			label: __("Select Dashboard"),
@@ -265,8 +264,8 @@ frappe.dashboard_utils = {
 			primary_action: (values) => {
 				values.name = docname;
 				values.set_standard = frappe.boot.developer_mode;
-				frappe.xcall(method, { args: values }).then(() => {
-					let dashboard_route_html = `<a href = "/app/dashboard/${values.dashboard}">${values.dashboard}</a>`;
+				return frappe.xcall(method, { args: values }).then(() => {
+					let dashboard_route_html = `<a href = "/desk/dashboard/${values.dashboard}">${values.dashboard}</a>`;
 					let message = __("{0} {1} added to Dashboard {2}", [
 						doctype,
 						values.name,
@@ -274,9 +273,8 @@ frappe.dashboard_utils = {
 					]);
 
 					frappe.msgprint(message);
+					dialog.hide();
 				});
-
-				dialog.hide();
 			},
 		});
 

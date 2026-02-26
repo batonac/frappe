@@ -1,5 +1,6 @@
 // Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
 // MIT License. See license.txt
+
 frappe.provide("frappe.treeview_settings");
 frappe.provide("frappe.views.trees");
 window.cur_tree = null;
@@ -191,13 +192,20 @@ frappe.views.TreeView = class TreeView {
 	}
 	get_root() {
 		var me = this;
+
 		frappe.call({
 			method: me.get_tree_nodes,
 			args: me.args,
 			callback: function (r) {
 				if (r.message) {
-					me.root_label = me.doctype;
-					me.root_value = "";
+					if (r.message.length == 1) {
+						me.root_label = r.message[0]["value"];
+						me.root_value = me.root_label;
+					} else {
+						me.root_label = me.doctype;
+						me.root_value = "";
+					}
+
 					me.make_tree();
 				}
 			},
@@ -355,7 +363,7 @@ frappe.views.TreeView = class TreeView {
 		var node = me.tree.get_selected_node();
 
 		if (!(node && node.expandable)) {
-			frappe.msgprint(__("Select a group node first."));
+			frappe.msgprint(__("Select a group {0} first.", [__(me.doctype)]));
 			return;
 		}
 
@@ -415,8 +423,10 @@ frappe.views.TreeView = class TreeView {
 			{
 				fieldtype: "Check",
 				fieldname: "is_group",
-				label: __("Group Node"),
-				description: __("Further nodes can be only created under 'Group' type nodes"),
+				label: __("Is Group"),
+				description: __(
+					"Further sub-groups can only be created under records marked as 'Group'"
+				),
 			},
 		];
 
@@ -483,7 +493,7 @@ frappe.views.TreeView = class TreeView {
 			{
 				label: __("View List"),
 				action: function () {
-					frappe.set_route("List", me.doctype);
+					frappe.set_route(["List", me.doctype, "List"]);
 				},
 			},
 			{

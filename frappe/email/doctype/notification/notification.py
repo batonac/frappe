@@ -14,7 +14,7 @@ from frappe.desk.doctype.notification_log.notification_log import enqueue_create
 from frappe.integrations.doctype.slack_webhook_url.slack_webhook_url import send_slack_message
 from frappe.model.document import Document
 from frappe.modules.utils import export_module_json, get_doc_module
-from frappe.utils import add_to_date, cast, now_datetime, nowdate, validate_email_address
+from frappe.utils import add_to_date, cast, cint, now_datetime, nowdate, validate_email_address
 from frappe.utils.data import evaluate_filters
 from frappe.utils.jinja import validate_template
 from frappe.utils.safe_exec import get_safe_globals
@@ -34,6 +34,7 @@ class Notification(Document):
 		from frappe.email.doctype.notification_recipient.notification_recipient import NotificationRecipient
 		from frappe.types import DF
 
+		attach_files: DF.Literal["", "From Field", "All"]
 		attach_print: DF.Check
 		channel: DF.Literal["Email", "Slack", "System Notification", "SMS"]
 		condition: DF.Code | None
@@ -56,9 +57,9 @@ class Notification(Document):
 			"Minutes Before",
 			"Value Change",
 			"Method",
-			"Custom",
 		]
 		filters: DF.Code | None
+		from_attach_field: DF.Literal[None]
 		is_standard: DF.Check
 		message: DF.Code | None
 		message_type: DF.Literal["Markdown", "HTML", "Plain Text"]
@@ -90,7 +91,7 @@ class Notification(Document):
 	# START: PreviewRenderer API
 
 	@frappe.whitelist()
-	def preview_meets_condition(self, preview_document):
+	def preview_meets_condition(self, preview_document: str):
 		if not self.condition and not self.filters:
 			return _("Yes")
 		try:
@@ -105,7 +106,7 @@ class Notification(Document):
 			return _("Failed to evaluate conditions: {}").format(e)
 
 	@frappe.whitelist()
-	def preview_message(self, preview_document):
+	def preview_message(self, preview_document: str):
 		try:
 			doc = frappe.get_cached_doc(self.document_type, preview_document)
 			context = get_context(doc)
@@ -122,7 +123,7 @@ class Notification(Document):
 			return _("Failed to render message: {}").format(e)
 
 	@frappe.whitelist()
-	def preview_subject(self, preview_document):
+	def preview_subject(self, preview_document: str):
 		try:
 			doc = frappe.get_cached_doc(self.document_type, preview_document)
 			context = get_context(doc)
@@ -165,6 +166,9 @@ class Notification(Document):
 
 		if self.event == "Value Change" and not self.value_changed:
 			frappe.throw(_("Please specify which value field must be checked"))
+
+		if self.attach_files == "From Field" and not self.from_attach_field:
+			frappe.throw(_("Please specify the field from which to attach files"))
 
 		self.validate_forbidden_document_types()
 		self.validate_condition()
@@ -352,7 +356,9 @@ def get_context(context):
 		              To queue a notification from a server script:
 
 		              ```python
-		              notification = frappe.get_doc("Notification", "My Notification", ignore_permissions=True)
+		              notification = frappe.get_doc(
+		                  "Notification", "My Notification", ignore_permissions=True
+		              )
 		              notification.queue_send(customer)
 		              ```
 
@@ -417,7 +423,12 @@ def get_context(context):
 				self.send_a_slack_msg(doc, context)
 			elif self.channel == "SMS":
 				self.send_sms(doc, context)
-			elif self.channel == "System Notification" or self.send_system_notification:
+			elif self.channel == "System Notification":
+				self.create_system_notification(doc, context)
+
+			# Additionally, if explicitly enabled, create a system notification
+			# even when the primary channel is not "System Notification".
+			if self.send_system_notification and self.channel != "System Notification":
 				self.create_system_notification(doc, context)
 		except Exception:
 			self.log_error("Failed to send Notification")
@@ -443,7 +454,7 @@ def get_context(context):
 			"subject": subject,
 			"from_user": doc.modified_by or doc.owner,
 			"email_content": frappe.render_template(self.message, context),
-			"attached_file": attachments and json.dumps(attachments[0]),
+			"attached_file": json.dumps(attachments) if attachments else None,
 		}
 		enqueue_create_notification(users, notification_doc)
 
@@ -488,6 +499,13 @@ def get_context(context):
 			comm = frappe.get_lazy_doc("Communication", communication)
 			comm.get_outgoing_email_account()
 
+		# We expect at most one print format attachment, but we don't know where it is.
+		print_letterhead = any(
+			attachment.get("print_letterhead")
+			for attachment in attachments
+			if attachment.get("print_format_attachment") == 1
+		)
+
 		frappe.sendmail(
 			recipients=recipients,
 			subject=subject,
@@ -499,7 +517,7 @@ def get_context(context):
 			reference_name=get_reference_name(doc),
 			attachments=attachments,
 			expose_recipients="header",
-			print_letterhead=((attachments and attachments[0].get("print_letterhead")) or False),
+			print_letterhead=print_letterhead,
 			communication=communication,
 		)
 
@@ -622,10 +640,28 @@ def get_context(context):
 
 		return list(set(receiver_list))
 
-	def get_attachment(self, doc):
-		"""check print settings are attach the pdf"""
-		if not self.attach_print:
-			return None
+	def get_attachment(self, doc) -> list[dict]:
+		"""Check Attachment Settings and return attachments accordingly"""
+		attachments = []
+
+		if self.attach_print:
+			attachments.append(self.get_print(doc))
+
+		if self.attach_files == "From Field" and self.from_attach_field:
+			attachments.append({"file_url": doc.get(self.from_attach_field)})
+		elif self.attach_files == "All":
+			attachments.extend(
+				frappe.get_all(
+					"File",
+					fields=["file_url"],
+					filters={"attached_to_doctype": self.document_type, "attached_to_name": doc.name},
+				)
+			)
+
+		return attachments
+
+	def get_print(self, doc):
+		"""check print settings and return dict with print info"""
 
 		print_settings = frappe.get_doc("Print Settings", "Print Settings")
 		if (doc.docstatus == 0 and not print_settings.allow_print_for_draft) or (
@@ -640,18 +676,17 @@ def get_context(context):
 				title=_("Error in Notification"),
 			)
 		else:
-			return [
-				{
-					"print_format_attachment": 1,
-					"doctype": doc.doctype,
-					"name": doc.name,
-					"print_format": self.print_format,
-					"print_letterhead": print_settings.with_letterhead,
-					"lang": frappe.db.get_value("Print Format", self.print_format, "default_print_language")
-					if self.print_format
-					else "en",
-				}
-			]
+			return {
+				"print_format_attachment": 1,
+				"doctype": doc.doctype,
+				"name": doc.name,
+				"print_format": self.print_format,
+				"print_letterhead": print_settings.with_letterhead,
+				"lang": doc.get("language")
+				or frappe.db.get_value("Print Format", self.print_format, "default_print_language")
+				if self.print_format
+				else "en",
+			}
 
 	def get_template(self, md_as_html=False):
 		module = get_doc_module(self.module, self.doctype, self.name)
@@ -686,7 +721,22 @@ def get_context(context):
 		self.message = self.get_template(md_as_html=True)
 
 	def on_trash(self):
+		if self.is_standard:
+			# Prevent deletion of standard notifications outside developer mode to avoid restoration during migration
+			if not frappe.conf.developer_mode and not frappe.flags.in_migrate and not frappe.flags.in_patch:
+				frappe.throw(
+					_("You are not allowed to delete a standard Notification. You can disable it instead.")
+				)
+
+			if frappe.conf.developer_mode and not frappe.flags.in_test:
+				frappe.db.after_commit(self.delete_notification_folder)
+
 		clear_notification_cache()
+
+	def delete_notification_folder(self):
+		from frappe.modules.export_file import delete_folder
+
+		delete_folder(self.module, "Notification", self.name)
 
 
 def clear_notification_cache():
@@ -694,7 +744,7 @@ def clear_notification_cache():
 
 
 @frappe.whitelist()
-def get_documents_for_today(notification):
+def get_documents_for_today(notification: str):
 	notification = frappe.get_doc("Notification", notification)
 	notification.check_permission("read")
 	return [d.name for d in notification.get_documents_for_today()]
@@ -831,3 +881,75 @@ def _parse_receiver_by_document_field(s):
 	else:
 		data_field, child_field = fragments[0], None
 	return data_field, child_field
+
+
+def create_notifications(notifications: list[dict], update: bool = False):
+	"""
+	Unlike standard notifications, these are NOT marked as is_standard=1,
+	so they won't be overwritten during migrations. Users can freely customize them.
+
+	Args:
+		notifications: List of notification dicts.
+		update: If True, update existing notification. If False (default), skip if exists.
+	"""
+	for notif_dict in notifications:
+		name = notif_dict.get("name")
+		existing = frappe.db.exists("Notification", name)
+
+		if existing and not update:
+			continue
+
+		if existing and update:
+			doc = frappe.get_doc("Notification", name)
+			doc.update(notif_dict)
+			doc.flags.ignore_validate = True
+			doc.save(ignore_permissions=True)
+			continue
+
+		notif_dict["doctype"] = "Notification"
+		notif_dict["is_standard"] = 0
+		notif_dict["owner"] = "Administrator"
+
+		doc = frappe.get_doc(notif_dict)
+		doc.flags.ignore_validate = True
+		doc.insert(ignore_permissions=True)
+
+
+def get_notification_templates(templates_dir: str) -> list[dict]:
+	"""
+	Load notification templates from the templates directory.
+
+	Templates are stored in subdirectories:
+		<templates_dir>/<name>/<name>.json
+		<templates_dir>/<name>/<name>.html|.md|.txt (optional message content based on message_type)
+	"""
+	templates = []
+
+	if not os.path.exists(templates_dir):
+		return templates
+
+	for folder_name in os.listdir(templates_dir):
+		folder_path = os.path.join(templates_dir, folder_name)
+		if not os.path.isdir(folder_path):
+			continue
+
+		json_file = os.path.join(folder_path, f"{folder_name}.json")
+		template = frappe.get_file_json(json_file) if os.path.exists(json_file) else None
+		if not template:
+			continue
+
+		message_type = template.get("message_type", "HTML")
+		ext = FORMATS.get(message_type, ".html")
+		message_file = os.path.join(folder_path, f"{folder_name}{ext}")
+		if message := frappe.read_file(message_file):
+			template["message"] = message
+
+		templates.append(template)
+
+	return templates
+
+
+def install_notification_templates():
+	templates_dir = frappe.get_module_path("Email", "doctype", "notification", "templates")
+	templates = get_notification_templates(templates_dir)
+	create_notifications(templates, update=False)

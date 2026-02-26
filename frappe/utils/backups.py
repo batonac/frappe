@@ -298,7 +298,7 @@ class BackupGenerator:
 	def zip_files(self):
 		# For backwards compatibility - pre v13
 		click.secho(
-			"BackupGenerator.zip_files has been deprecated in favour of" " BackupGenerator.backup_files",
+			"BackupGenerator.zip_files has been deprecated in favour of BackupGenerator.backup_files",
 			fg="yellow",
 		)
 		return self.backup_files()
@@ -543,7 +543,7 @@ def _get_tables(doctypes: list[str], existing_tables: list[str]) -> list[str]:
 
 
 @frappe.whitelist()
-def fetch_latest_backups(partial=False) -> dict:
+def fetch_latest_backups(partial: bool = False) -> dict:
 	"""Fetch paths of the latest backup taken in the last 30 days.
 
 	Note: Only for System Managers

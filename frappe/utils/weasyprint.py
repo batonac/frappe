@@ -8,7 +8,7 @@ from frappe import _
 
 
 @frappe.whitelist()
-def download_pdf(doctype, name, print_format, letterhead=None):
+def download_pdf(doctype: str, name: str | int, print_format: str, letterhead: str | None = None):
 	doc = frappe.get_doc(doctype, name)
 	doc.check_permission("print")
 	generator = PrintFormatGenerator(print_format, doc, letterhead)
@@ -100,7 +100,7 @@ class PrintFormatGenerator:
 
 	def render_pdf(self):
 		"""Return a bytes sequence of the rendered PDF."""
-		HTML, CSS = import_weasyprint()
+		HTML, _CSS = import_weasyprint()
 
 		self._make_header_footer()
 

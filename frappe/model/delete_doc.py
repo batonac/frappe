@@ -100,9 +100,6 @@ def delete_doc(
 			else:
 				return False
 
-		# delete passwords
-		delete_all_passwords_for(doctype, name)
-
 		doc = None
 		if doctype == "DocType":
 			if for_reload:
@@ -143,6 +140,8 @@ def delete_doc(
 				except (OSError, KeyError):
 					# in case a doctype doesnt have any controller code  nor any app and module
 					pass
+
+			frappe.clear_cache(doctype=name)
 
 		else:
 			# Lock the doc without waiting
@@ -197,6 +196,9 @@ def delete_doc(
 					now=frappe.in_test,
 					enqueue_after_commit=True,
 				)
+
+		# delete passwords
+		delete_all_passwords_for(doctype, name)
 
 		# clear cache for Document
 		doc.clear_cache()
@@ -288,7 +290,7 @@ def check_permission_and_not_submitted(doc):
 			_("{0} {1}: Submitted Record cannot be deleted. You must {2} Cancel {3} it first.").format(
 				_(doc.doctype),
 				doc.name,
-				"<a href='https://docs.erpnext.com//docs/user/manual/en/setting-up/articles/delete-submitted-document' target='_blank'>",
+				"<a href='https://docs.frappe.io/erpnext/user/manual/en/delete-submitted-document' target='_blank'>",
 				"</a>",
 			),
 			raise_exception=True,

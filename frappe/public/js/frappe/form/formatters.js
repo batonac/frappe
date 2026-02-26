@@ -35,11 +35,11 @@ frappe.form.formatters = {
 	},
 	Data: function (value, df) {
 		if (df && df.options == "URL") {
-			if (!value) return;
+			if (!value) return "";
 			return `<a href="${value}" title="Open Link" target="_blank">${value}</a>`;
 		}
 		if (df && df.options == "IBAN") {
-			if (!value) return;
+			if (!value) return "";
 			return frappe.utils.get_formatted_iban(value);
 		}
 		value = value == null ? "" : value;
@@ -99,7 +99,7 @@ frappe.form.formatters = {
 			docfield.precision ||
 			cint(frappe.boot.sysdefaults && frappe.boot.sysdefaults.float_precision) ||
 			2;
-		return frappe.form.formatters._right(flt(value, precision) + "%", options);
+		return frappe.form.formatters._right(format_number(value, null, precision) + "%", options);
 	},
 	Rating: function (value, docfield) {
 		let rating_html = "";
@@ -164,6 +164,7 @@ frappe.form.formatters = {
 		return `<input type="checkbox" disabled
 			class="disabled-${value ? "selected" : "deselected"}">`;
 	},
+
 	Link: function (value, docfield, options, doc) {
 		var doctype = docfield._options || docfield.options;
 		var original_value = value;
@@ -178,7 +179,7 @@ frappe.form.formatters = {
 		}
 
 		if (options && (options.for_print || options.only_value)) {
-			return link_title || value;
+			return get_link_display_value(doctype, link_title, value);
 		}
 
 		if (frappe.form.link_formatters[doctype]) {
@@ -202,7 +203,7 @@ frappe.form.formatters = {
 		} else if (docfield && doctype) {
 			if (frappe.model.can_read(doctype)) {
 				const a = document.createElement("a");
-				a.href = `/app/${encodeURIComponent(
+				a.href = `/desk/${encodeURIComponent(
 					frappe.router.slug(doctype)
 				)}/${encodeURIComponent(original_value)}`;
 				a.dataset.doctype = doctype;
@@ -211,10 +212,10 @@ frappe.form.formatters = {
 				a.innerText = __((options && options.label) || link_title || value);
 				return a.outerHTML;
 			} else {
-				return link_title || value;
+				return get_link_display_value(doctype, link_title, value);
 			}
 		} else {
-			return link_title || value;
+			return get_link_display_value(doctype, link_title, value);
 		}
 	},
 	Date: function (value) {
@@ -397,7 +398,7 @@ frappe.form.formatters = {
 	},
 	Icon: (value) => {
 		return value
-			? `<div>
+			? `<div class='flex' style='gap: 8px;'>
 			<div class="selected-icon">${frappe.utils.icon(value, "md")}</div>
 			<span class="icon-value">${value}</span>
 		</div>`
@@ -407,6 +408,13 @@ frappe.form.formatters = {
 	AttachImage: format_attachment_url,
 };
 
+function get_link_display_value(doctype, link_title, value) {
+	let translated_doctypes = frappe.boot?.translated_doctypes || [];
+	if (translated_doctypes.includes(doctype)) {
+		return __(link_title || value);
+	}
+	return link_title || value;
+}
 function format_attachment_url(url) {
 	return url ? `<a href="${url}" target="_blank">${url}</a>` : "";
 }
@@ -417,7 +425,13 @@ frappe.form.get_formatter = function (fieldtype) {
 };
 
 frappe.format = function (value, df, options, doc) {
-	if (!df) df = { fieldtype: "Data" };
+	let mask_readonly = false;
+	if (df?.parent) {
+		const mask_fields = frappe.get_meta(df.parent)?.masked_fields;
+		mask_readonly = mask_fields?.includes(df.fieldname);
+	}
+
+	if (!df || mask_readonly) df = { fieldtype: "Data" };
 	if (df.fieldname == "_user_tags") df = { ...df, fieldtype: "Tag" };
 	var fieldtype = df.fieldtype || "Data";
 

@@ -21,6 +21,7 @@ frappe.ui.form.ControlMultiCheck = class ControlMultiCheck extends frappe.ui.for
 		const columns = this.df.columns;
 		this.$checkbox_area = $('<div class="checkbox-options"></div>').appendTo(this.wrapper);
 		this.$checkbox_area.get(0).style.setProperty("--checkbox-options-columns", columns);
+		this.$checkbox_area.get(0).style.setProperty("padding", "1em");
 	}
 
 	refresh() {
@@ -84,6 +85,10 @@ frappe.ui.form.ControlMultiCheck = class ControlMultiCheck extends frappe.ui.for
 			if (option.danger) {
 				checkbox.find(".label-area").addClass("text-danger");
 			}
+			if (option.warning) {
+				checkbox.find(".label-area").addClass("text-warning");
+			}
+
 			option.$checkbox = checkbox;
 		});
 		if (this.df.select_all) {
@@ -125,7 +130,15 @@ frappe.ui.form.ControlMultiCheck = class ControlMultiCheck extends frappe.ui.for
 	}
 
 	select_all(deselect = false) {
-		$(this.wrapper).find(`:checkbox`).prop("checked", deselect).trigger("click");
+		$(this.wrapper)
+			.find(`:checkbox`)
+			.prop("checked", function () {
+				if (this.disabled) {
+					return this.checked;
+				}
+				return deselect;
+			})
+			.trigger("click");
 	}
 
 	select_options(selected_options) {
@@ -154,8 +167,8 @@ frappe.ui.form.ControlMultiCheck = class ControlMultiCheck extends frappe.ui.for
 	get_checkbox_element(option) {
 		return $(`
 			<div class="checkbox unit-checkbox">
-				<label title="${option.description || ""}">
-					<input type="checkbox" data-unit="${option.value}"></input>
+				<label title="${option.description || ""}" style="display: flex; align-items: center;">
+					<input type="checkbox" data-unit="${option.value}" style="flex-shrink: 0;">
 					<span class="label-area" data-unit="${option.value}">${option.label}</span>
 				</label>
 			</div>

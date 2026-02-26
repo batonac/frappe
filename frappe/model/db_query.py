@@ -8,7 +8,11 @@ import json
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from functools import cached_property
+from functools import cached_property, lru_cache
+
+import sqlparse
+from sqlparse import tokens
+from sqlparse.sql import Function, Parenthesis, Statement
 
 import frappe
 import frappe.defaults
@@ -20,6 +24,7 @@ from frappe.database.utils import DefaultOrderBy, FallBackDateTimeStr, NestedSet
 from frappe.model import OPTIONAL_FIELDS, get_permitted_fields
 from frappe.model.meta import get_table_columns
 from frappe.model.utils import is_virtual_doctype
+from frappe.model.utils.mask import mask_field_value
 from frappe.model.utils.user_settings import get_user_settings, update_user_settings
 from frappe.query_builder.utils import Column
 from frappe.types import Filters, FilterSignature, FilterTuple
@@ -32,6 +37,22 @@ from frappe.utils import (
 	get_timespan_date_range,
 )
 from frappe.utils.data import DateTimeLikeObject, get_datetime, getdate, sbool
+
+
+@lru_cache(maxsize=128)
+def _parse_sql(field: str) -> Statement | None:
+	"""
+	Parse a given SQL statement using `sqlparse`.
+
+	Args:
+		field (str): The SQL statement string to parse.
+
+	Returns:
+		Statement | None: A `sqlparse.sql.Statement` object if parsing succeeds, otherwise `None`.
+	"""
+	if parsed := sqlparse.parse(field):
+		return parsed[0]
+
 
 LOCATE_PATTERN = re.compile(r"locate\([^,]+,\s*[`\"]?name[`\"]?\s*\)", flags=re.IGNORECASE)
 LOCATE_CAST_PATTERN = re.compile(r"locate\(([^,]+),\s*([`\"]?name[`\"]?)\s*\)", flags=re.IGNORECASE)
@@ -219,7 +240,42 @@ class DatabaseQuery:
 		if pluck:
 			return [d[pluck] for d in result]
 
+		if self.doctype and result:
+			result = self.mask_fields(result)
+
 		return result
+
+	def mask_fields(self, result):
+		"""Mask fields in the result based on the doctype's masked fields"""
+		from frappe.model.utils.mask import mask_dict_results, mask_list_results
+
+		masked_fields = self.get_masked_fields()
+
+		if not masked_fields:
+			return result
+
+		if self.as_list:
+			field_index_map = {}
+			for idx, field in enumerate(self.fields):
+				# handle aliases (e.g. `tabSI`.`posting_date` as posting_date)
+				if " as " in field.lower():
+					alias = field.split(" as ")[1].strip(" '")
+					field_index_map[alias] = idx
+				else:
+					# extract last part after `.`
+					col = field.split(".")[-1].strip("`")
+					field_index_map[col] = idx
+
+			return mask_list_results(result, masked_fields, field_index_map)
+		else:
+			return mask_dict_results(result, masked_fields)
+
+	def get_masked_fields(self):
+		"""Get masked fields for the doctype"""
+
+		meta = self.get_meta(self.doctype)
+
+		return meta.get_masked_fields()
 
 	def build_and_run(self):
 		args = self.prepare_args()
@@ -234,7 +290,9 @@ class DatabaseQuery:
 
 		if self.distinct:
 			args.fields = "distinct " + args.fields
-			args.order_by = ""  # TODO: recheck for alternative
+			if frappe.db.db_type == "postgres":
+				# PostgreSQL requires ORDER BY expressions to appear in SELECT list when using DISTINCT
+				args.order_by = ""
 
 		# Postgres requires any field that appears in the select clause to also
 		# appear in the order by and group by clause
@@ -407,6 +465,52 @@ from {tables}
 			"sleep",
 		]
 
+		def _find_subqueries(parsed: Statement) -> list:
+			"""
+			Recursively find all subqueries in a parsed SQL statement.
+			"""
+			subqueries = []
+
+			for token in parsed.tokens:
+				if isinstance(token, Parenthesis):
+					# Check for DML token for subquery check
+					is_subquery = False
+					for sub_token in token.tokens:
+						if sub_token.ttype is tokens.DML:
+							is_subquery = True
+							break
+					if is_subquery:
+						subqueries.append(token)
+					# Recursively check for nested subqueries
+					subqueries.extend(_find_subqueries(token))
+				elif token.is_group:
+					subqueries.extend(_find_subqueries(token))
+
+			return subqueries
+
+		def _check_sql_token(statement: Statement) -> None:
+			"""
+			Checks the output of `sqlparse.parse()` to detect blocked functions and subqueries.
+			"""
+			if _find_subqueries(statement):
+				_raise_exception()
+
+			for token in statement.tokens:
+				if isinstance(token, Function):
+					if (name := (token.get_name())) and name.lower() in blacklisted_functions:
+						_raise_exception()
+
+				if token.ttype in tokens.Keyword:
+					if any(re.search(rf"\b{kw}\b", token.value.lower()) for kw in blacklisted_keywords):
+						_raise_exception()
+
+				if token.ttype in tokens.Name and not re.match(r"^`\w.*`$", token.value.strip()):
+					if any(re.search(rf"\b{kw}\b", token.value.lower()) for kw in blacklisted_keywords):
+						_raise_exception()
+
+				if token.is_group:
+					_check_sql_token(token)
+
 		def _raise_exception():
 			frappe.throw(_("Use of sub-query or function is restricted"), frappe.DataError)
 
@@ -421,21 +525,8 @@ from {tables}
 			lower_field = field.lower().strip()
 
 			if SUB_QUERY_PATTERN.match(field):
-				# Check for subquery anywhere in the field, not just at the beginning
-				if "(" in lower_field:
-					# Check all parentheses pairs, not just the first one
-					paren_start = 0
-					while True:
-						location = lower_field.find("(", paren_start)
-						if location == -1:
-							break
-						token = lower_field[location + 1 :].lstrip().split(" ", 1)[0]
-						if any(
-							re.search(r"\b" + re.escape(keyword) + r"\b", token)
-							for keyword in blacklisted_keywords + blacklisted_functions
-						):
-							_raise_exception()
-						paren_start = location + 1
+				# Check all tokens for subquery detection
+				_check_sql_token(_parse_sql(field))
 
 				if "@" in lower_field:
 					# prevent access to global variables
@@ -519,6 +610,8 @@ from {tables}
 	def check_read_permission(self, doctype: str, parent_doctype: str | None = None):
 		if self.flags.ignore_permissions:
 			return
+
+		self.join = "left join"
 
 		if doctype not in self.permission_map:
 			self._set_permission_map(doctype, parent_doctype)
@@ -623,6 +716,7 @@ from {tables}
 				ignore_virtual=True,
 			)
 		)
+
 		permitted_child_table_fields = {}
 
 		# Create a copy of the fields list and reverse it to avoid index issues when removing fields
@@ -747,7 +841,7 @@ from {tables}
 				nodes = frappe.get_all(
 					ref_doctype,
 					filters={"lft": [">", lft], "rgt": ["<", rgt]},
-					order_by="`lft` ASC",
+					order_by="lft ASC",
 					pluck="name",
 				)
 				if f.operator.lower() == "descendants of (inclusive)":
@@ -757,7 +851,7 @@ from {tables}
 				nodes = frappe.get_all(
 					ref_doctype,
 					filters={"lft": ["<", lft], "rgt": [">", rgt]},
-					order_by="`lft` DESC",
+					order_by="lft DESC",
 					pluck="name",
 				)
 
@@ -781,6 +875,15 @@ from {tables}
 			can_be_null &= not getattr(df, "not_nullable", False)
 			if f.operator.lower() == "in":
 				can_be_null &= not f.value or any(v is None or v == "" for v in f.value)
+
+			# Handle empty lists for IN/NOT IN operators before processing
+			# IN with empty list should return 0 results (always False: 1=0)
+			# NOT IN with empty list should return all results (always True: 1=1)
+			if isinstance(f.value, (list, tuple)) and len(f.value) == 0:
+				if f.operator.lower() == "in":
+					return "1=0"
+				else:  # not in
+					return "1=1"
 
 			if value is None:
 				values = f.value or ""
@@ -1064,9 +1167,19 @@ from {tables}
 			if c := frappe.call(frappe.get_attr(method), self.user, doctype=self.doctype):
 				conditions.append(c)
 
+		active_child_tables = []
+		if len(self.tables) > 1:  # only if query has multiple tables involved
+			main_table_name = f"tab{self.doctype}"
+			for table_name in self.tables:
+				clean_name = table_name.replace("`", "").replace('"', "")
+				if clean_name != main_table_name:
+					active_child_tables.append(clean_name)
+
 		if permission_script_name := get_server_script_map().get("permission_query", {}).get(self.doctype):
 			script = frappe.get_doc("Server Script", permission_script_name)
-			if condition := script.get_permission_query_conditions(self.user):
+			if condition := script.get_permission_query_conditions(
+				self.user, active_child_tables=active_child_tables
+			):
 				conditions.append(condition)
 
 		return " and ".join(conditions) if conditions else ""
@@ -1127,7 +1240,12 @@ from {tables}
 			r"select\b.*\bfrom",
 		}
 
-		if any(re.search(r"\b" + pattern + r"\b", _lower) for pattern in subquery_indicators):
+		# Replace doctype names with a hardcoded string "doc"
+		# This is to avoid false positives based on doctype name
+		sanitized = re.sub(r"`tab[^`]*`", " doc ", _lower)
+
+		# Run the subquery checks against the sanitized string
+		if any(re.search(r"\b" + pattern + r"\b", sanitized) for pattern in subquery_indicators):
 			frappe.throw(_("Cannot use sub-query here."))
 
 		blacklisted_sql_functions = {
@@ -1226,22 +1344,6 @@ def cast_name(column: str) -> str:
 	return column
 
 
-def check_parent_permission(parent, child_doctype):
-	if parent:
-		# User may pass fake parent and get the information from the child table
-		if child_doctype and not (
-			frappe.db.exists("DocField", {"parent": parent, "options": child_doctype})
-			or frappe.db.exists("Custom Field", {"dt": parent, "options": child_doctype})
-		):
-			raise frappe.PermissionError
-
-		if frappe.permissions.has_permission(parent):
-			return
-
-	# Either parent not passed or the user doesn't have permission on parent doctype of child table!
-	raise frappe.PermissionError
-
-
 def get_order_by(doctype, meta):
 	order_by = ""
 
@@ -1253,7 +1355,7 @@ def get_order_by(doctype, meta):
 		# will covert to
 		# `tabItem`.`idx` desc, `tabItem`.`creation` desc
 		order_by = ", ".join(
-			f"`tab{doctype}`.`{f_split[0].strip()}` {f_split[1].strip()}"
+			f"{f_split[0].strip()} {f_split[1].strip()}"
 			for f in meta.sort_field.split(",")
 			if (f_split := f.split(maxsplit=2))
 		)
@@ -1261,7 +1363,7 @@ def get_order_by(doctype, meta):
 	else:
 		sort_field = meta.sort_field or "creation"
 		sort_order = (meta.sort_field and meta.sort_order) or "desc"
-		order_by = f"`tab{doctype}`.`{sort_field}` {sort_order}"
+		order_by = f"{sort_field} {sort_order}"
 
 	return order_by
 

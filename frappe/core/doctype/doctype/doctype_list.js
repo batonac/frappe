@@ -24,6 +24,7 @@ frappe.listview_settings["DocType"] = {
 				fieldtype: "Data",
 				reqd: 1,
 				default: doctype_name,
+				length: 61,
 			},
 			{ fieldtype: "Column Break" },
 			{
@@ -102,7 +103,7 @@ frappe.listview_settings["DocType"] = {
 			primary_action_label: __("Create & Continue"),
 			primary_action(values) {
 				if (!values.istable) values.editable_grid = 0;
-				frappe.db
+				return frappe.db
 					.insert({
 						doctype: "DocType",
 						...values,

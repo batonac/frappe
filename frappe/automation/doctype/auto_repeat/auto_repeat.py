@@ -1,7 +1,7 @@
 # Copyright (c) 2018, Frappe Technologies Pvt. Ltd. and contributors
 # License: MIT. See LICENSE
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from dateutil.relativedelta import relativedelta
 
@@ -556,7 +556,13 @@ def get_auto_repeat_entries(date=None):
 
 
 @frappe.whitelist()
-def make_auto_repeat(doctype, docname, frequency="Daily", start_date=None, end_date=None):
+def make_auto_repeat(
+	doctype: str,
+	docname: str | int,
+	frequency: str = "Daily",
+	start_date: str | datetime | None = None,
+	end_date: str | datetime | None = None,
+):
 	if not start_date:
 		start_date = getdate(today())
 	doc = frappe.new_doc("Auto Repeat")
@@ -573,7 +579,9 @@ def make_auto_repeat(doctype, docname, frequency="Daily", start_date=None, end_d
 # method for reference_doctype filter
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
-def get_auto_repeat_doctypes(doctype, txt, searchfield, start, page_len, filters):
+def get_auto_repeat_doctypes(
+	doctype: str, txt: str, searchfield: str, start: int, page_len: int, filters: str | dict | list
+):
 	res = frappe.get_all(
 		"Property Setter",
 		{
@@ -605,14 +613,15 @@ def update_reference(docname: str, reference: str):
 	return "success"  # backward compatbility
 
 
-@frappe.whitelist()
-def generate_message_preview(reference_dt, reference_doc, message=None, subject=None):
+@frappe.whitelist(methods=["POST"])
+def generate_message_preview(name: str):
 	frappe.has_permission("Auto Repeat", "write", throw=True)
-	doc = frappe.get_doc(reference_dt, reference_doc)
+	auto_repeat = frappe.get_doc("Auto Repeat", str(name))
+	doc = frappe.get_doc(auto_repeat.reference_doctype, auto_repeat.reference_document)
 	doc.check_permission()
 	subject_preview = _("Please add a subject to your email")
-	msg_preview = frappe.render_template(message, {"doc": doc})
-	if subject:
-		subject_preview = frappe.render_template(subject, {"doc": doc})
+	msg_preview = frappe.render_template(auto_repeat.message, {"doc": doc})
+	if auto_repeat.subject:
+		subject_preview = frappe.render_template(auto_repeat.subject, {"doc": doc})
 
 	return {"message": msg_preview, "subject": subject_preview}

@@ -7,15 +7,18 @@ from contextlib import suppress
 from typing import Any
 
 from rq import get_current_job
+from rq.command import send_stop_job_command
+from rq.exceptions import InvalidJobOperation
 
 import frappe
+from frappe import _
 from frappe.database.utils import dangerously_reconnect_on_connection_abort
 from frappe.desk.form.load import get_attachments
 from frappe.desk.query_report import generate_report_result
 from frappe.model.document import Document
 from frappe.monitor import add_data_to_monitor
 from frappe.utils import add_to_date, now
-from frappe.utils.background_jobs import enqueue
+from frappe.utils.background_jobs import enqueue, get_redis_conn
 
 # If prepared report runs for longer than this time it's automatically considered as failed
 FAILURE_THRESHOLD = 6 * 60 * 60
@@ -162,7 +165,7 @@ def update_job_id(prepared_report):
 
 
 @frappe.whitelist()
-def make_prepared_report(report_name, filters=None):
+def make_prepared_report(report_name: str, filters: dict[str, Any] | str | list | None = None):
 	"""run reports in background"""
 	prepared_report = frappe.get_doc(
 		{
@@ -173,6 +176,28 @@ def make_prepared_report(report_name, filters=None):
 	).insert(ignore_permissions=True)
 
 	return {"name": prepared_report.name}
+
+
+@frappe.whitelist()
+def stop_prepared_report(report_name: str):
+	"""Stop a running Prepared Report job."""
+	prepared_report = frappe.get_doc("Prepared Report", report_name)
+	prepared_report.check_permission("write")
+
+	job_id = prepared_report.job_id
+	if not job_id.startswith(frappe.local.site):
+		frappe.throw(f"Invalid job_id: must start with {frappe.local.site}")
+
+	try:
+		send_stop_job_command(connection=get_redis_conn(), job_id=job_id)
+		frappe.db.set_value(
+			"Prepared Report",
+			prepared_report.name,
+			{"status": "Cancelled"},
+		)
+		frappe.msgprint(_("Job stopped successfully"), alert=True, indicator="green")
+	except InvalidJobOperation:
+		frappe.msgprint(_("Job is not running."), title=_("Invalid Operation"))
 
 
 def process_filters_for_prepared_report(filters: dict[str, Any] | str) -> str:
@@ -187,7 +212,7 @@ def process_filters_for_prepared_report(filters: dict[str, Any] | str) -> str:
 
 
 @frappe.whitelist()
-def get_reports_in_queued_state(report_name, filters):
+def get_reports_in_queued_state(report_name: str, filters: dict[str, Any] | str | list):
 	return frappe.get_all(
 		"Prepared Report",
 		filters={
@@ -227,7 +252,7 @@ def expire_stalled_report():
 
 
 @frappe.whitelist()
-def delete_prepared_reports(reports):
+def delete_prepared_reports(reports: str | list[dict[str, Any]]):
 	reports = frappe.parse_json(reports)
 	for report in reports:
 		prepared_report = frappe.get_doc("Prepared Report", report["name"])
@@ -259,7 +284,7 @@ def create_json_gz_file(data, dt, dn, report_name):
 
 
 @frappe.whitelist()
-def download_attachment(dn):
+def download_attachment(dn: str):
 	pr = frappe.get_doc("Prepared Report", dn)
 	if not pr.has_permission("read"):
 		frappe.throw(frappe._("Cannot Download Report due to insufficient permissions"))
@@ -305,7 +330,7 @@ def has_permission(doc, user):
 
 
 @frappe.whitelist()
-def enqueue_json_to_csv_conversion(prepared_report_name):
+def enqueue_json_to_csv_conversion(prepared_report_name: str):
 	"""Call this to enqueue the conversion in background."""
 	enqueue(method=convert_json_to_csv, queue="long", prepared_report_name=prepared_report_name)
 
