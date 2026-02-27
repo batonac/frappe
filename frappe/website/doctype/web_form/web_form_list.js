@@ -8,3 +8,11 @@ frappe.listview_settings["Web Form"] = {
 		}
 	},
 };
+
+frappe.ui.form.WebFormQuickEntryForm = class WebFormQuickEntryForm extends (
+	frappe.ui.form.QuickEntryForm
+) {
+	open_form_if_not_list() {
+		frappe.set_route("Form", this.doc.doctype, this.doc.name);
+	}
+};
