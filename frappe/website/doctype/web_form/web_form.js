@@ -65,13 +65,11 @@ frappe.ui.form.on("Web Form", {
 	on_tab_change: (frm) => {
 		let current_tab = frm.get_active_tab().label;
 
-		if (current_tab === "Form Builder") {
+		if (current_tab === "Form") {
 			frm.footer.wrapper.hide();
-			frm.form_wrapper.find(".form-message").hide();
 			frm.form_wrapper.addClass("mb-1");
 		} else {
 			frm.footer.wrapper.show();
-			frm.form_wrapper.find(".form-message").show();
 			frm.form_wrapper.removeClass("mb-1");
 		}
 	},
