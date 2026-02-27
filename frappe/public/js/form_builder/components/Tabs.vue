@@ -112,7 +112,7 @@ function delete_tab(tab, with_children) {
 </script>
 
 <template>
-	<div class="tab-header" v-if="store.form.layout.tabs.length > 1">
+	<div class="tab-header" v-if="store.form.layout.tabs.length > 1 && !store.is_web_form">
 		<draggable
 			v-show="has_tabs"
 			class="tabs"
