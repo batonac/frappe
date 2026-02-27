@@ -155,7 +155,12 @@ frappe.ui.form.on("Web Form", {
 					}
 				}
 				frm.refresh_field("web_form_fields");
-				frm.scroll_to_field("web_form_fields");
+				frm.dirty();
+
+				// Re-render the form builder with the new fields
+				if (frappe.web_form_builder?.store) {
+					frappe.web_form_builder.store.fetch();
+				}
 			});
 		});
 	},
