@@ -55,8 +55,11 @@ export const useStore = defineStore("form-builder-store", () => {
 	}
 
 	function get_df(fieldtype, fieldname = "", label = "") {
-		let docfield = is_web_form.value ? "Web Form Field" : 
-						is_customize_form.value ? "Customize Form Field" : "DocField";
+		let docfield = is_web_form.value
+			? "Web Form Field"
+			: is_customize_form.value
+			? "Customize Form Field"
+			: "DocField";
 		let df = frappe.model.get_new_doc(docfield);
 		df.name = frappe.utils.get_random(8);
 		df.fieldtype = fieldtype;
@@ -101,8 +104,11 @@ export const useStore = defineStore("form-builder-store", () => {
 		}
 
 		if (!get_docfields.value.length) {
-			let docfield = is_web_form.value ? "Web Form Field" :
-						  is_customize_form.value ? "Customize Form Field" : "DocField";
+			let docfield = is_web_form.value
+				? "Web Form Field"
+				: is_customize_form.value
+				? "Customize Form Field"
+				: "DocField";
 			if (!frappe.get_meta(docfield)) {
 				await load_doctype_model(docfield);
 			}
@@ -289,7 +295,7 @@ export const useStore = defineStore("form-builder-store", () => {
 			let fields = get_updated_fields();
 			let has_error = validate_fields(fields, doc.value.istable);
 			if (has_error) return has_error;
-			
+
 			let field_property = is_web_form.value ? "web_form_fields" : "fields";
 			frm.value.set_value(field_property, fields);
 			return fields;
@@ -303,8 +309,11 @@ export const useStore = defineStore("form-builder-store", () => {
 	function get_updated_fields() {
 		let fields = [];
 		let idx = 0;
-		let new_field_name = is_web_form.value ? "new-web-form-field-" :
-						  is_customize_form.value ? "new-customize-form-field-" : "new-docfield-";
+		let new_field_name = is_web_form.value
+			? "new-web-form-field-"
+			: is_customize_form.value
+			? "new-customize-form-field-"
+			: "new-docfield-";
 
 		let layout_fields = JSON.parse(JSON.stringify(form.value.layout.tabs));
 

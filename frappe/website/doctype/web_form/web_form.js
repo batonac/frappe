@@ -56,7 +56,7 @@ frappe.ui.form.on("Web Form", {
 		frm.trigger("add_get_fields_button");
 		frm.trigger("add_publish_button");
 		frm.trigger("render_condition_table");
-		
+
 		if (frm.doc.doc_type) {
 			render_form_builder(frm);
 		}
@@ -445,7 +445,7 @@ function render_list_settings_message(frm) {
 
 function render_form_builder(frm) {
 	if (!frm.doc.doc_type) return;
-	
+
 	if (frappe.web_form_builder && frappe.web_form_builder.doctype === frm.doc.name) {
 		frappe.web_form_builder.setup_page_actions();
 		frappe.web_form_builder.store.fetch();
