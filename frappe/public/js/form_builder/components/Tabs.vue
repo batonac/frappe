@@ -18,9 +18,11 @@ whenever(Backspace, (value) => {
 });
 
 const dragged = ref(false);
-const selected = computed(() => store.selected(store.current_tab.df.name));
-const has_tabs = computed(() => store.form.layout.tabs.length > 1);
-store.form.active_tab = store.form.layout.tabs[0].df.name;
+const selected = computed(() => store.current_tab ? store.selected(store.current_tab.df.name) : false);
+const has_tabs = computed(() => (store.form.layout.tabs?.length ?? 0) > 1);
+if (store.form.layout.tabs?.length) {
+	store.form.active_tab = store.form.layout.tabs[0].df.name;
+}
 
 function activate_tab(tab) {
 	store.activate_tab(tab);

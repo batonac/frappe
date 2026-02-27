@@ -36,7 +36,8 @@ export const useStore = defineStore("form-builder-store", () => {
 	});
 
 	let current_tab = computed(() => {
-		return form.value.layout.tabs.find((tab) => tab.df.name == form.value.active_tab);
+		if (!form.value.layout.tabs || !form.value.layout.tabs.length) return null;
+		return form.value.layout.tabs.find((tab) => tab.df.name == form.value.active_tab) || null;
 	});
 
 	const active_element = useActiveElement();
@@ -107,12 +108,19 @@ export const useStore = defineStore("form-builder-store", () => {
 			}
 			let df = frappe.get_meta(docfield).fields;
 			if (is_web_form.value) {
+				// Deep copy to avoid mutating shared meta
+				df = JSON.parse(JSON.stringify(df));
 				web_form_docfields.value = df;
 			} else if (is_customize_form.value) {
 				custom_docfields.value = df;
 			} else {
 				docfields.value = df;
 			}
+		}
+
+		// Populate fieldname options from the parent doctype for web forms
+		if (is_web_form.value && doc.value.doc_type) {
+			await populate_web_form_fieldname_options(doc.value.doc_type);
 		}
 
 		// Preserve the currently active tab index before regenerating layout
@@ -125,6 +133,16 @@ export const useStore = defineStore("form-builder-store", () => {
 		}
 
 		form.value.layout = get_layout();
+
+		// Ensure at least one tab exists so the builder is usable on empty forms
+		// (mirrors the state a DocType has after empty-section cleanup)
+		if (form.value.layout.tabs.length === 0) {
+			form.value.layout.tabs.push({
+				df: get_df("Tab Break", "", __("Details")),
+				sections: [],
+				is_first: true,
+			});
+		}
 
 		// Try to restore the previously active tab by index if it still exists
 		if (
@@ -174,7 +192,11 @@ export const useStore = defineStore("form-builder-store", () => {
 	}
 
 	function validate_fields(fields, is_table) {
-		fields = scrub_field_names(fields);
+		// Web form fields don't need auto-generated fieldnames — they either
+		// reference a doctype field or are intentionally "virtual" (no fieldname).
+		if (!is_web_form.value) {
+			fields = scrub_field_names(fields);
+		}
 		let error_message = "";
 
 		let has_fields = fields.some((df) => {
@@ -358,6 +380,33 @@ export const useStore = defineStore("form-builder-store", () => {
 		delete df_copy.name;
 		delete new_df_copy.name;
 		return JSON.stringify(df_copy) != JSON.stringify(new_df_copy);
+	}
+
+	async function populate_web_form_fieldname_options(parent_doctype) {
+		// Load the parent doctype meta if not already loaded
+		if (!frappe.get_meta(parent_doctype)) {
+			await load_doctype_model(parent_doctype);
+		}
+
+		let parent_fields = frappe.meta.get_docfields(parent_doctype).filter((df) => {
+			return (
+				(frappe.model.is_value_type(df.fieldtype) &&
+					!["lft", "rgt"].includes(df.fieldname)) ||
+				["Table", "Table Multiselect"].includes(df.fieldtype) ||
+				frappe.model.layout_fields.includes(df.fieldtype)
+			);
+		});
+
+		let options = parent_fields.map((df) => ({
+			label: df.label,
+			value: df.fieldname,
+		}));
+
+		// Update the fieldname field's options in our web_form_docfields
+		let fieldname_df = web_form_docfields.value.find((df) => df.fieldname === "fieldname");
+		if (fieldname_df) {
+			fieldname_df.options = options;
+		}
 	}
 
 	function get_layout() {

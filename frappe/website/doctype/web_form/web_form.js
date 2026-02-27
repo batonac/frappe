@@ -23,18 +23,6 @@ frappe.ui.form.on("Web Form", {
 		};
 	},
 
-	before_save: function (frm) {
-		let form_builder = frappe.web_form_builder;
-		if (form_builder?.store) {
-			let fields = form_builder.store.update_fields();
-
-			// if fields is a string, it means there is an error
-			if (typeof fields === "string") {
-				frappe.throw(fields);
-			}
-		}
-	},
-
 	after_save: function (frm) {
 		if (
 			frappe.web_form_builder &&
@@ -69,12 +57,6 @@ frappe.ui.form.on("Web Form", {
 		frm.trigger("add_publish_button");
 		frm.trigger("render_condition_table");
 		
-		if (frm.doc.doc_type) {
-			render_form_builder(frm);
-		}
-	},
-
-	doc_type: function (frm) {
 		if (frm.doc.doc_type) {
 			render_form_builder(frm);
 		}
@@ -242,6 +224,9 @@ frappe.ui.form.on("Web Form", {
 
 	doc_type: function (frm) {
 		frm.trigger("set_fields");
+		if (frm.doc.doc_type) {
+			render_form_builder(frm);
+		}
 	},
 
 	allow_multiple: function (frm) {
@@ -249,6 +234,16 @@ frappe.ui.form.on("Web Form", {
 	},
 
 	before_save: function (frm) {
+		let form_builder = frappe.web_form_builder;
+		if (form_builder?.store) {
+			let fields = form_builder.store.update_fields();
+
+			// if fields is a string, it means there is an error
+			if (typeof fields === "string") {
+				frappe.throw(fields);
+			}
+		}
+
 		let static_filters = JSON.parse(frm.doc.condition_json || "[]");
 		frm.set_value("condition_json", JSON.stringify(static_filters));
 		frm.trigger("render_condition_table");
