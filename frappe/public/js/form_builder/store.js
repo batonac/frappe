@@ -233,7 +233,7 @@ export const useStore = defineStore("form-builder-store", () => {
 		fields.forEach((df) => {
 			// check if fieldname already exist
 			let duplicate = fields.filter((f) => f.fieldname == df.fieldname);
-			if (duplicate.length > 1) {
+			if (df.fieldname && duplicate.length > 1) {
 				error_message = __("Fieldname {0} appears multiple times", get_field_data(df));
 			}
 
