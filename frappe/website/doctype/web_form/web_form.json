@@ -5,7 +5,9 @@
  "document_type": "Document",
  "engine": "InnoDB",
  "field_order": [
-  "form_tab",
+  "form_builder_tab",
+  "form_builder",
+  "settings_tab",
   "title",
   "route",
   "published",
@@ -13,10 +15,8 @@
   "doc_type",
   "module",
   "is_standard",
-  "section_break_1",
+  "section_break_auvu",
   "introduction_text",
-  "web_form_fields",
-  "settings_tab",
   "access_control_section",
   "anonymous",
   "login_required",
@@ -47,6 +47,9 @@
   "section_break_4",
   "show_sidebar",
   "website_sidebar",
+  "form_tab",
+  "section_break_1",
+  "web_form_fields",
   "customization_tab",
   "button_label",
   "banner_image",
@@ -68,6 +71,7 @@
  ],
  "fields": [
   {
+   "allow_in_quick_entry": 1,
    "fieldname": "title",
    "fieldtype": "Data",
    "label": "Title",
@@ -75,12 +79,14 @@
    "reqd": 1
   },
   {
+   "allow_in_quick_entry": 1,
    "fieldname": "route",
    "fieldtype": "Data",
    "label": "Route",
    "unique": 1
   },
   {
+   "allow_in_quick_entry": 1,
    "fieldname": "doc_type",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -90,12 +96,14 @@
    "reqd": 1
   },
   {
+   "allow_in_quick_entry": 1,
    "fieldname": "module",
    "fieldtype": "Link",
    "label": "Module",
    "options": "Module Def"
   },
   {
+   "allow_in_quick_entry": 1,
    "default": "0",
    "fieldname": "is_standard",
    "fieldtype": "Check",
@@ -191,7 +199,7 @@
    "label": "Max attachment size"
   },
   {
-   "description": "For help see <a href=\"https://frappeframework.com/docs/user/en/guides/portal-development/web-forms\" target=\"_blank\">Client Script API and Examples</a>",
+   "description": "For help see <a href=\"https://frappeframework.com/docs/user/en/guides/portal-development/web-forms\" target=\"_blank\" rel=\"noopener noreferrer\">Client Script API and Examples</a>",
    "fieldname": "client_script",
    "fieldtype": "Code",
    "label": "Client script",
@@ -289,11 +297,21 @@
   {
    "fieldname": "form_tab",
    "fieldtype": "Tab Break",
-   "label": "Form"
+   "label": "Fields"
   },
   {
    "fieldname": "section_break_1",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "form_builder_tab",
+   "fieldtype": "Tab Break",
+   "label": "Form"
+  },
+  {
+   "fieldname": "form_builder",
+   "fieldtype": "HTML",
+   "label": "Form Builder"
   },
   {
    "fieldname": "settings_tab",
@@ -424,12 +442,16 @@
   {
    "fieldname": "column_break_hhec",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_auvu",
+   "fieldtype": "Section Break"
   }
  ],
  "icon": "icon-edit",
  "is_published_field": "published",
  "links": [],
- "modified": "2025-12-12 16:29:35.806107",
+ "modified": "2026-02-27 07:53:59.107391",
  "modified_by": "Administrator",
  "module": "Website",
  "name": "Web Form",
@@ -445,6 +467,7 @@
    "write": 1
   }
  ],
+ "quick_entry": 1,
  "row_format": "Dynamic",
  "sort_field": "creation",
  "sort_order": "DESC",

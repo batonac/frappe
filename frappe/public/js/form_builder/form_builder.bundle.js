@@ -5,12 +5,13 @@ import FormBuilderComponent from "./FormBuilder.vue";
 import { registerGlobalComponents } from "./globals.js";
 
 class FormBuilder {
-	constructor({ wrapper, frm, doctype, customize }) {
+	constructor({ wrapper, frm, doctype, customize, webform }) {
 		this.$wrapper = $(wrapper);
 		this.frm = frm;
 		this.page = frm.page;
 		this.doctype = doctype;
 		this.customize = customize;
+		this.webform = webform;
 		this.read_only = false;
 
 		this.init();
@@ -67,6 +68,7 @@ class FormBuilder {
 	update_store() {
 		this.store.doctype = this.doctype;
 		this.store.is_customize_form = this.customize;
+		this.store.is_web_form = this.webform;
 		this.store.page = this.page;
 		this.store.frm = this.frm;
 	}
