@@ -59,12 +59,45 @@ const selected = computed(() => {
 const show = ref(false);
 const autocomplete_value = ref("");
 const fields = computed(() => {
+	const allowed_web_form_fieldtypes = [
+		"Attach",
+		"Attach Image",
+		"Check",
+		"Currency",
+		"Color",
+		"Data",
+		"Date",
+		"Datetime",
+		"Duration",
+		"Float",
+		"HTML",
+		"Int",
+		"Link",
+		"Password",
+		"Phone",
+		"Rating",
+		"Select",
+		"Signature",
+		"Small Text",
+		"Text",
+		"Text Editor",
+		"Table",
+		"Time",
+		"Section Break",
+		"Column Break",
+		"Page Break"
+	];
+
 	let fields = frappe.model.all_fieldtypes
 		.filter((df) => {
-			if (in_list(frappe.model.layout_fields, df)) {
-				return false;
+			if (store.is_web_form) {
+				return allowed_web_form_fieldtypes.includes(df);
+			} else {
+				if (in_list(frappe.model.layout_fields, df)) {
+					return false;
+				}
+				return true;
 			}
-			return true;
 		})
 		.map((df) => {
 			let out = { label: __(df), value: df };
