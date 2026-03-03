@@ -85,7 +85,7 @@ const fields = computed(() => {
 		"Time",
 		"Section Break",
 		"Column Break",
-		"Page Break"
+		"Page Break",
 	];
 
 	let fields = frappe.model.all_fieldtypes
